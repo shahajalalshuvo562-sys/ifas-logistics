@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Logistics Tracker</title>
+<style>:root{color-scheme:light}body{margin:0}[hidden]{display:none!important}</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: fleet-office board. Sticky header with a scrolling tab rail, then one working surface per tab:
+   a dashboard of summary tiles + action list, or a wide editable table. Road-signage condensed headings. */
+:root{
+  --bg:#eceee9; --surface:#fafaf7; --field:#ffffff; --ink:#17201d; --mute:#5b6862; --line:#d3d8d1;
+  --accent:#0e6a5b; --accent-ink:#ffffff; --head:#1d2a26; --head-ink:#eef3ef; --logo-bg:#ffffff;
+  --good:#1d7440; --good-bg:#d8eedd; --warn:#855400; --warn-bg:#fae8b4; --bad:#a3281d; --bad-bg:#f7d6d1;
+  --f-head:'Barlow Condensed','Arial Narrow',sans-serif; --f-body:'Barlow',system-ui,sans-serif; --f-mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#111715; --surface:#19211e; --field:#131a18; --ink:#e5ebe7; --mute:#97a59e; --line:#2a3531;
+  --accent:#4fc2ab; --accent-ink:#0a1411; --head:#0c110f; --head-ink:#e5ebe7;
+  --good:#72d49c; --good-bg:#17382a; --warn:#f0c35e; --warn-bg:#3a2d0e; --bad:#ff9f92; --bad-bg:#451d19; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#111715; --surface:#19211e; --field:#131a18; --ink:#e5ebe7; --mute:#97a59e; --line:#2a3531;
+  --accent:#4fc2ab; --accent-ink:#0a1411; --head:#0c110f; --head-ink:#e5ebe7;
+  --good:#72d49c; --good-bg:#17382a; --warn:#f0c35e; --warn-bg:#3a2d0e; --bad:#ff9f92; --bad-bg:#451d19; color-scheme:dark}
+
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font:15px/1.45 var(--f-body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 40px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);background:var(--head);z-index:20}
+.bar{position:sticky;top:env(safe-area-inset-top,0px);z-index:15;margin-inline:calc(-1*max(16px,env(safe-area-inset-left,0px))) calc(-1*max(16px,env(safe-area-inset-right,0px)));padding-inline:max(16px,env(safe-area-inset-left,0px)) max(16px,env(safe-area-inset-right,0px));background:var(--head);color:var(--head-ink)}
+.bar-top{display:flex;align-items:baseline;gap:12px 20px;flex-wrap:wrap;padding-top:12px}
+h1{font:700 26px/1 var(--f-head);letter-spacing:.03em;text-transform:uppercase;margin:0}
+.sub{color:color-mix(in srgb,var(--head-ink) 65%,transparent);font-size:13px}
+.sync{margin-inline-start:auto;font:500 12px var(--f-mono);color:color-mix(in srgb,var(--head-ink) 65%,transparent)}
+nav{display:flex;gap:2px;overflow-x:auto;padding-top:10px;scrollbar-width:thin}
+nav button{flex:none;background:none;border:0;border-bottom:3px solid transparent;color:color-mix(in srgb,var(--head-ink) 70%,transparent);font:600 15px var(--f-head);letter-spacing:.05em;text-transform:uppercase;padding:8px 12px 7px;cursor:pointer}
+nav button:hover{color:var(--head-ink)}
+nav button[aria-current="page"]{color:var(--head-ink);border-bottom-color:var(--accent)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+main{max-width:1500px;margin:0 auto;padding-top:20px}
+h2{font:700 22px/1.1 var(--f-head);letter-spacing:.03em;text-transform:uppercase;margin:0}
+.head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 16px;margin-bottom:12px}
+.head p{margin:2px 0 0;color:var(--mute);font-size:13px;max-width:70ch}
+.tools{margin-inline-start:auto;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.btn{background:var(--accent);color:var(--accent-ink);border:0;border-radius:4px;font:600 14px var(--f-body);padding:8px 14px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.btn:hover{filter:brightness(1.08)}
+.search,.sm{background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:4px;font:14px var(--f-body);padding:7px 10px}
+.search{width:200px}
+.sm{width:76px}
+
+.tablewrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:6px}
+table{border-collapse:collapse;width:100%;font-size:13.5px}
+th{position:sticky;top:0;background:var(--surface);text-align:start;font:600 12px var(--f-head);letter-spacing:.08em;text-transform:uppercase;color:var(--mute);padding:9px 6px;border-bottom:2px solid var(--line);white-space:nowrap}
+th.calc{color:var(--accent)}
+td{padding:3px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr:hover td{background:color-mix(in srgb,var(--accent) 6%,transparent)}
+td.n{color:var(--mute);font:12px var(--f-mono);text-align:end;padding-inline-end:8px;width:34px}
+.in{width:100%;background:transparent;color:var(--ink);border:1px solid transparent;border-radius:3px;font:inherit;padding:5px 6px}
+.in:hover{border-color:var(--line)}
+.in:focus{background:var(--field);border-color:var(--accent)}
+.mono{font-family:var(--f-mono);font-size:12.5px}
+select.in{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:6px}
+select.in.good,.calc.good{background:var(--good-bg);color:var(--good);font-weight:600}
+select.in.warn,.calc.warn{background:var(--warn-bg);color:var(--warn);font-weight:600}
+select.in.bad,.calc.bad{background:var(--bad-bg);color:var(--bad);font-weight:600}
+.calc{display:inline-block;padding:4px 8px;border-radius:3px;white-space:nowrap;font-size:13px}
+.calc.plain{color:var(--ink);font-family:var(--f-mono);font-size:12.5px}
+.del{background:none;border:0;color:var(--mute);cursor:pointer;font-size:12px;padding:5px 6px;border-radius:3px;white-space:nowrap}
+.del:hover{color:var(--bad)}
+.del.arm{background:var(--bad-bg);color:var(--bad);font-weight:600}
+.empty{padding:36px 20px;text-align:center;color:var(--mute)}
+.empty b{display:block;color:var(--ink);font:600 18px var(--f-head);letter-spacing:.04em;text-transform:uppercase;margin-bottom:4px}
+
+/* dashboard */
+.rdate{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--mute)}
+.rdate input{background:var(--field);color:var(--ink);border:1px solid var(--line);border-radius:4px;font:14px var(--f-body);padding:6px 8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:16px;align-items:start}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:14px 16px;min-width:0}
+.panel h3{font:700 15px var(--f-head);letter-spacing:.09em;text-transform:uppercase;color:var(--mute);margin:0 0 10px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px 14px}
+.stat b{display:block;font:700 30px/1 var(--f-head);font-variant-numeric:tabular-nums}
+.stat span{font-size:12.5px;color:var(--mute)}
+.stat.bad b{color:var(--bad)} .stat.warn b{color:var(--warn)} .stat.good b{color:var(--good)}
+.alist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.alist li{display:flex;gap:10px;align-items:baseline;font-size:14px}
+.tag{flex:none;font:600 11px var(--f-head);letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:3px}
+.tag.bad{background:var(--bad-bg);color:var(--bad)} .tag.warn{background:var(--warn-bg);color:var(--warn)}
+.ok{color:var(--good);font-weight:600}
+.vlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:8px}
+.veh{border:1px solid var(--line);border-radius:5px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.veh .pl{font:500 14px var(--f-mono)}
+.veh .dr{font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.veh .ft{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.chip{font:600 11px var(--f-head);letter-spacing:.07em;text-transform:uppercase;padding:2px 7px;border-radius:3px;background:var(--line);color:var(--mute)}
+.chip.good{background:var(--good-bg);color:var(--good)} .chip.warn{background:var(--warn-bg);color:var(--warn)} .chip.bad{background:var(--bad-bg);color:var(--bad)}
+.note{font-size:12.5px;color:var(--mute);margin-top:12px}
+.err{background:var(--bad-bg);color:var(--bad);padding:8px 12px;border-radius:4px;margin-bottom:12px;font-size:13px}
+.logo{flex:none;align-self:center;background:var(--logo-bg);border-radius:5px;padding:5px 9px;display:flex}
+.logo img{display:block;height:34px;width:auto;max-width:100%}
+.langbtn{background:transparent;color:var(--head-ink);border:1px solid color-mix(in srgb,var(--head-ink) 40%,transparent);border-radius:4px;font:600 13px var(--f-body);padding:4px 12px;cursor:pointer}
+.langbtn:hover{background:color-mix(in srgb,var(--head-ink) 14%,transparent)}
+:root[lang="ar"]{--f-body:'Noto Sans Arabic','Barlow',system-ui,sans-serif;--f-head:'Noto Sans Arabic','Barlow Condensed',sans-serif}
+:root[lang="ar"] :is(h1,h2,th,.panel h3,nav button,.tag,.chip,.empty b){text-transform:none;letter-spacing:0}
+:root[lang="ar"] h1{font-size:24px;line-height:1.2}
+:root[lang="ar"] .stat b{font-family:var(--f-head)}
+:root[lang="ar"] .mono,:root[lang="ar"] .pl{direction:ltr;text-align:start}
+@media (max-width:560px){h1{font-size:22px}.search{width:100%}.tools{margin-inline-start:0;width:100%}}
+@media (prefers-reduced-motion:no-preference){.btn,.in{transition:background .12s,border-color .12s}}
+
+.gate{max-width:480px;margin:56px auto;text-align:center;padding:30px 24px}
+.gate b{display:block;font:700 22px var(--f-head);letter-spacing:.03em;text-transform:uppercase;margin-bottom:8px}
+.gate p{margin:0 0 14px;color:var(--mute)}
+.tag.info{background:var(--line);color:var(--mute)}
+.v{display:block;padding:5px 6px}
+.banner{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;background:var(--warn-bg);color:var(--warn);padding:9px 14px;border-radius:4px;margin-bottom:12px;font-size:14px;font-weight:500}
+.banner button{background:none;border:1px solid currentColor;color:inherit;border-radius:4px;padding:3px 10px;font:600 13px var(--f-body);cursor:pointer}
+.issues{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.issues li{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;font-size:14px}
+.issues .wh{font:12px var(--f-mono);color:var(--mute)}
+.mini{border-collapse:collapse;font-size:14px}
+.mini td,.mini th{padding:4px 18px 4px 0;border-bottom:1px solid var(--line);text-align:start}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+
+</head>
+<body>
+<div class="bar">
+  <div class="bar-top"><span class="logo"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAPIAAAA+CAIAAACeINE8AAABCGlDQ1BJQ0MgUHJvZmlsZQAAeJxjYGA8wQAELAYMDLl5JUVB7k4KEZFRCuwPGBiBEAwSk4sLGHADoKpv1yBqL+viUYcLcKakFicD6Q9ArFIEtBxopAiQLZIOYWuA2EkQtg2IXV5SUAJkB4DYRSFBzkB2CpCtkY7ETkJiJxcUgdT3ANk2uTmlyQh3M/Ck5oUGA2kOIJZhKGYIYnBncAL5H6IkfxEDg8VXBgbmCQixpJkMDNtbGRgkbiHEVBYwMPC3MDBsO48QQ4RJQWJRIliIBYiZ0tIYGD4tZ2DgjWRgEL7AwMAVDQsIHG5TALvNnSEfCNMZchhSgSKeDHkMyQx6QJYRgwGDIYMZAKbWPz9HbOBQAABRAElEQVR42tX9aZRd15EeiH4Re+9z7pATMoHEPBHgBJAgCc6DOIosDVUaKEols6rsdr/ncrWrbXev7tVvvaF7PT/bf+r5eaju1V3t7rZckqraUqlUGkoSJZEixQEiwAkECRLESGJMDIlMIDPvvefsvSPej33uzZsJUCoN1LITa911kXmHM8SO/UXEF1+QquID+1FABMqIQAQMYAAWYYoA+aJNNhdrI7gAAkAAAAIKoAAi0AFawBww4fVC0brQmi0uTsWzZzc0GvddtWVlvW6jEoSIiAhAevyV/ghUVUjTBzMpCAArSAEotHfcogCRqc68elRAqvcSEXj+r9VLFAAp8DOPnLDovd3fy+V/D4CgkZX6zqX3F9LqfIgAzJtB+m/fx3H1xfOvWXiRBRCk8wK/34H0HZH0v1ehUFZVMAGAGlr4ikUXCgCl6993Sebf0DUgiw/yh9A9WoB690U1KqJGrjUDuAMEwAMBKAEF2oqpubnJmZmpmZkLreJC4WdiPDE13Y6eDbJQrmDafv3aPK8zfk0/RKRQperSUrp5lMxxfg0nA6L+8+++QAk/xWyVKnsgXfzF85+/wAERoJT+Cc3bt/KCR+2zyoWH1jO/RX5Nf4ZZ/rKOQ5Vo/iSZkHxB1zoIqguOkqi78i93DpdZ8ATgAzZrpEMUtVTdYVURcMlUkhXQueBbIq1AZ6enp9qdMxcvnpmdKVTmvG8XPogGIJL1MJQ3og91S1LOLhkeXbtqQ40RIrIPxEP3nwJDVanfCylAQsrzRik9l9H16VAoqfTZtOn5NKKeBalAFzjRS6xHF/yNoQvur6J/uTCIFj6+z/6z+Pm8fyCVZOt9B8A/ayfkS23sffc+qoyi6yJ44adKdV6qAKf/LnLf1X542a/sPrEfuKPTdO0VpBAFoEyRqAXsfPfQm0eOzvjQiTxbFp6oMByyrISJRNHlABNxhFWCGnbWcJQa27XjK5ZkYFngLD/AH6bKsi9xab1fysI/RYD7/nqZmw90/ZL0vC3rIqO9nCUSWPt9fL93pUseQZe458t5X+r57PTkA/QUSt2FTZessX6UUq12WnQGTPPnsejc+rbKX4NZR6iCGRBEhTFKaAPvlX7nu0ePTs9IrelVY61eQNhlPpIwKxOzJSIFp9vtfZGxojU3mmfXrlg2ANQZGUNl/jZ8IDeD+nCIJg8tC41TARhQhSxJum5vgT0TLYDcCqU+a77kLf1IpvLSXSPg7u1TTTBICfTTMU7/He93h70rJkRQfd9r+FNt/W+OBOUS34yuSwY09i+93rVZsBg1vUDm/0S9FVDthQzQB27WNB9OQRQUwdYDF4GDk5PH236uPhBcvQjB1vKOeGstW0pwMSYrUQQJyuJqTGXh1K8ZHVs+0uAQI7yHWnY/z5X9Rfcbmg9yuB9MV6bFXRCrpAwSre4WqypV9gIQEVU2nULRZMpKIAV1YXQPkOsCSyJoz7IXvqZ6NAohcHrs3XtB2gL0sq6xBzZUexsf43Ixm6r2I5Nf1In0gBhUu+tYtcLc1V+FYPpfuWCzEa08RA9PU++85gGV/cANgjlosFVAo0rUASYLv/fo8YugMmt44xQusgkQUcmVRaISQIaIhBRGiVXUh3JusMab1q8YYNQ5gUdRFYb5QE+hP3tAqj27IkCJSav8SDeKTKiFJBmydgMkVZCCkBx+VAUJd9+b3t4zFFrsYkGVd5bqpV0Do953akxXuHqs7nFUeb9MSPLNppfdUCGQENEie0quWlSIiHUhWiBKmw293yXrz9XMm3P3iVY7BRFJlWwiIoYSiBZhOFoIY6ACIpDofBJpfiV84CBEQJFAUIimfaMNXOgUZ+faMW90wEGRWRsShmUVkBAJmJkVrCoRkVVIo4l+bHh03dgyFQ8WQSjFN8j+SiL0n7Lf9GzE9KftCEIcQLH7vZa6kTuRAApOb7HSRReKHmropQWQYqM+D0TdYKkCFr0XEwFMGnqJw/mgNhmfkqL7SJq+lEhBfFnALuDq2/tC0r7EVRXiqxIgomSgQgszK79IJkQXpF+Y0iJXAGRZu2avZv62VlmdCDBDSQkkENIUi7BClRd6hA/crAPEwKl6JkNs5oASOHj85IV2x9caai2TURGNYhhE5EGU1YrCO7ZMJoSSjEUUK2gYt3n56qXW1hVWRUjrnEEJH3AyhAADigtxXwRF5jlAgdh1ma6bxU3GYgBDUIZLGREiqBCzqKiqJUMpgb8Ac6eUFogrFLwgXTj/JX2wnKoMA8+7eSVYJQVEQrSWy+CZGYCIGJtHiQDSbwBEgWHExVsEAYhEBsRkmEFAUfp65qAqIuCfcc0lRjYGgPfROZe+nRkxBGOtqvooBCMCYziBrMgLIgDqS52rsiUCqCzEOlaCMRSCkMCYCj6JCDH/OsyawRHRCoEoKEfCxEzn6LnJwJWfUxJNWydS3cOQEpOBUhRVATM4iOn45Y3B9SPL6kBN4cBlitM+YGDdi0t4QZaKS6Y2cGx2eiZKIAMyoRST/CIpDKDe+DCSubWDI4OGOFS+MT0YIo1ycuLMexOniS0R9awkLVERISJjDACNEmMEwKYv30w9yM8AjDGAtFutLMucsSIRQGZ53aqVI0ODyYJVFYZFU3mIj5+eOH7iVJ7XQggKFpFarVaWnXQMKURWVSZi5g3r1i8ZamaZK6MYUmsMICLSWxuXufXG+LJ0edZn05XlCVSIyRARk4EHGOhEOX9+enJysixDOvEiFM6ZZcuWLV26NOPu1pWxEpTgA5hZRUIQa7nTbtfq9V8TCDGABHFsI8grWsCRc2dPXZiKWS2hLlIWUpAQKUCsQBSnxIKoEapZVONloJQrVy3bNNasRWQKAIYsWH8dOT6tPGi1qStFYg+cbs/uePvtfacnWoDJ6iTWuUyjCEQ5iO9kRbll9ar7t27LGwM5JygOkZhQgSq9c/DQ//2f/tPIpmccSpVZxxh7tpgCSmYmohgXoH3tZVogaQFYawxRUbQlxK3XbP6jf/ZPRITIKIGZQBxUibgT4te/8e2vfO0vYlQ2jpm9j2QMG6jGXtWWtYp1/4vf//u/9ZsfazqjqsSkqiqVM16ch6QqsUHMLs9EJARxmSVmr6JQwzYFAVMXZ/cfPHDk3fcOHnl38vz0bLt19szk5ORkWZZZlhGR9z6vuSVjI2NjY/W8Njw8vH7N2s2bNm3asHHVimXWpmieKcL7WKs1oVDEX4+3hunWkArCpMeRc+faxkRjQMSKSAm09hU8RC2IVKFqCAYxk3Jp5q5cPr6EkEm1UzOTUl8I8mv7YRKCAjGvnVc57cu2cwSEGKxCREBqM2ImE/wqSKxlAXAMjpWHVSJVdZYnz0+dOT8VjE1mFKE90GmtVVURUVUDYub0X2McuoUgmQfNsMS+6NTrdV+0AagEy+aGm29pNgettd5HtpWrDyqWzOEj7+565dUTJydcrZ7l9SgagqhGNhShJPMZEopKGr/119+966676svHiA0TVERE2Bjtq1X1I0FiLn2ZZZlAjbVS4StWwkzp33zzzR8/+9yLL7188tSpdukvXLxoXAYlZk6rV2dnU+IlTPl3T55Mp0+i1tpmvTE2OnLTthvuuP3Wh+69f3CglllO4bf3pXPm12HWisgMBHhGYXB8avbw1FQnc9GYVIZgUiECTAUeiVQjg6EgEkWIoW3VrxkdWzc6xAproEBABJFC+YOtMXaxKuZrJuk4W0AJLq319brUB4J1ZQFSZjYi0TpxYtDudNhENh0gV40xmp5XVgWBmbNak40BExHZKouGnre2FRygLhRRY0wv080LC4yGQMayzQxpWcZVa1bfftudzUa9ygkSpeibYCLw8mu79x08lDUG2dhSIICr1WFSfi0mZ5G+hoKoxANH3n1j79srlt9DhAhYZoJR1QWxqy6uA6lCIoxD4SVzHIGX33jrL/7qG0899dT5qQt5npNhH6U+PAJABPOIPwqTOudy1DtlkTYrZWLFnC/nTp0+cOibP3r2ue9+7/uf/+3P3n/PXSwJLNmUtvmgzVoUqkRBNRLNCN6bPH+2KNrNBowhGAKpQghCMMrzN0tIEUEQDSb4hqP1y5aOZmy8OMcKCVBAoijTB596X1hiTrDHAczshQrhdhRPpGyZMgOOCGUsciFSBGWCMYlSxEpEUI0qkihSxoUggZjVECvUaIr6Ic5mVeZbQvApmjLWGiJSQrdyP2/WwZe1Wi0UnSy3iJI5d+ftt1979ZWkUBVKCQVSIrKE0+cv7tz18pmzkwMjI2SsCpiMAmXw3WSpYYikzIMhhc62Wj986sk7brtlyUBNBJHEkA2xtNZWwfAl22aWZWlzCJ6s44utzte/+c3/+d99cfLCBWNcbWiYmcFMZYDNVFXgJUSIWGZFjGVotVr15gDAbJ2PIZbinOGsDkhuXdv7HzzzzCu7X/vPfvd3/uEf/D0JsJZVhfSD99YpgaCGSsbEdOfQ6ZMdS6U1JqWeUtZRUykDShAFM5OSRCEDimyYxgYGNyxb0QCazAhKFiblwPGB188VIj2qFpnEOUugKQaQ2MzWS66JOqIMsBCyZIltbi27TsqpK2ABShGfKohg2CuU2JCFGkNGKe3R88k170OMgQkqEFVIFEXpW3K52h6JUiyL1lyeOV+Uy5eN3Xnb9oG6i94bBrMRlZR3jsDLr7365ttvuTwzLguCIvhUoWOXB/VEZFAtsJQvN8zF7OxLr7z2xt63P3T7TYYRQzRM/fEiEVVeTDmlQQAQG2a2louof/VX3/gX/+bfFJx7OLCzxgaRGIStA5kQfFF4lVDL8no9d86RQlXn2p12q4CPLs9c5shSjKqq1mVRwtDoqA/hf/23/9b74h/8/t8nco7x6wEhGgEyKICT0xfem5yMAw2xFjGlgVPtG6ycmAmiYoxRJkQQkUMcBMbr+fLBuhEwA0UAMxOiRstGRLCoHKOL2QK0+He/jPOuMnUGsICJaiNc0EhCFCWKBTGEUFh4bhemKC2QAWWUHAoV1Wi42qaYoRpJjUJUWCFKUBUAhhiCRpaNDA2PDA0Y4hijSDC24u0tPC9lNr4onCFnuWx3rr5q86033WgAay2RqpIPXo1l4gszcz958cVTE2eyer0oCnKZtRZsvI+AaIhkoAxEUogQEzQIbF67ODu76+WXbr7phsGMoRwkWsuJhdetTXIv1EkQWRREFIAXXnzxj//kT0plNTbLXIxRUiZeyVrrizLEctnoku3brr/vQ/dce/VVWZZJ9Mz2xMmJ7//ghzt27jo3PaWqrCYqQBQAUiokNvK802r/+f/5F9ddt+0jD9ybMJH9Bex0HjlViJP7+Zq9WkM3Mc6lCDMm2zh86kxJjmyuMEpRjZKkB+ml6hjKQOm9NWCJ1pdjJNtWrRwBWEQtk3OICksinhnEDlqV8ESUDS08wnSxZZ499/MlBIUgplvorurH4FQR0YCmMbbTtlGbWa3ti4zYxqJuQL4z4Gyzli3LayaqGlLDAiWoNaYqZzNEA7EoBcCCKoapEDEgKmyoPTf7f/07j3/+0c+EskNRiTTltnold63IscJkFVFCVJXM2GajUa/XjYJIYwggY1wWgAAcPnrsldf3gBhsDFsfA8FAxTJY9YoN6xTx3SNHyVhrbYyJJy/EtijLZ5/f8dADD960ZbMaE0OwYFVQSuykC5tqyaoJgUsUa3mqXXz1m9+e6nhbqzM5AOxcjFES3iiK2GnddN2W/+Yf/6Pbtl9vgaiSEQPw0Os2rn347ltf2rPnX/yr/3HPvnfIkPiQN5pRVImsc2UI9cHhudbcV//ym3ffcedI3f0KQMgCL6iXIUAKQJy1gKNT59+bPIt6Q8jGqCBmqCSsSvNlT2NMjJEMqQrU5zGuWzqyenCIoTXLhYcFrKGyKLlmPWIMZWYyQwSa59H4MrjM9ueb+TIkg58TYOt8NY4BC4zkwMXpZrvVsLZTtFYODNdr+YBpDjozmOdXbdiwxOajGTWB2C0T4FLeTpUbSRVmTjkWgVIUo5I7Gm42x5fUWeuOLsfqWOxqoIkaplBViQGkxjJgvIIIc0XYsXPXiVMT7LIgAkRmZjLeewD1Wu1zj356+vzkF977YrvTRlYzzkKJjFMRsua9Y8deee3VG7dsJgJnNkS1fUWZCCWwIUmgKEpJ5ETx2p43Dh55N4CgMFARscTM7IxViZ1We9Xypf/oD/7gju3XO0BjyA0D0mq1Go1Gu2i7vHH7tm1/+Pv/l//XP/lnpybPDw4umesU1jpjjMYYQiACiI4cOXLw4MFbrr+W6FcVb70PUx1AAAXgPLD/zKnTnTnfrMEwde9p5MoldonDqkxliDlbjZHKssa6fvnKsVqzAXTaZS3LyCACIXcGKBHrNgO47UsGcpeJSCh9ludVvrmbbfpFyzbcI9xVTQMQUrKgXNHUeP2KpWvGhurDo8p26fiKgZpdwjCAA7KqFQg5gSNlVQ4MyY9Jap5gjny5vAtArKTKAkMpSVox16k/89BHumLtA7pUYSUVVqm6jkQEhicmJp5/bsfMXKsxMCjgKAARGZHoAYwtWX791i3tudY3/uqb4fxUSkuXZWmtFZHMuNnZmRd+svPjv/HI8qUjpDBm3pct7j9gNiAQRcWhQ4fOnj3rnCPmxLhkJo2iGjVEAFu3br36mivT+62x7fZcnueNRkNirOeNIJHY3HLjTZvXbTh+/CTXipw1hDJGggSjQkokMn3+XAjlr6wc0+VfXcrsVSVWcAc4MTt76PwZGay3NXWBEWuVBVFCwswASFmrDqZoISaUy4YG14wtaQBRpF7LiHChiK3oBxo1BQj1GV80Xe5cRoBXMUxZLV+8b+jlCch/c8uuzpISGBECHCML/p7rrmsDHsgABji1+bQxOzt36J19U2fPDtazD9/7oczZtDMlX0/E83wiJaHFjH9WgUSVqBJEAyf+nkSSyNZduvEwWCApXhORBG2ZmUjZdG2aKSheeXX3wcOH87weBMZahoiIiDpDMcZrNm1at3oVEV191ZXnX9wJjd6zAGQMKYLGWrPxzjvvvLL7tY9/+IEYo7UGl+OUE5GmaqJAgVarJSECUBHLrpePFxGGWGsbjUatVjOA98E4W683y7JDRM656AMBJNLM8m1brn3ttddip2OsMcRMrIYYliAK6yyfn5xM29QvadaMnifrN+gqbmAhEqAADp45fbI1qyOjnSJyEGZO7B7hylX3SHCszGwRvFUZUGwcW7KyOVQDcmaJEgzPxPCVJ75baLzvvg9tWrpi0OVzRaeW5w4UY7TWKaQMZSrYdnsPu9sD/fyWraB+v0iSiNIdXxKDIK3WxbOTU62ZucP7D587d/7kuXNTU1Onjh87+M7+Ym72vrvvuvOOm+v14QqRKaCwBDCCIovMyrLIRrVrlySIqfgKSgiWGTGAFFUBvHtgypzS20RgM79kABBJjDDGgE6cm3r6uefPX5ypDQyqUloAhmFIBZo7d+stNy8brAO48bqtO3fuDCLGODImqlpny05wzp6fnt6xY8e9d90x0qhHiYZSqaGqIVzCEEykGRERQxAVZohoqiNqItv48M477xw7emLk6o2iVMaQGWtcxsTee2esxmgMW8KH7/vQmtUrh4aXRJWg4rJMRIpOJzOcFtKN27ax/iq8tXa9UJVr62uyUEIAeeCC4PCZM3OMQsTmmXoY4cQ91hRoKFdVYAVFJaYQCiN+Wb2+een4kpQdA9RwB9jz3uHv7txx6NTJl48d+dj9Dzxw3Y1L81qK4Yx1XiJEqhJdlwFnuszPX8Cme55eSaTbkihA5vJ22f7yV/70R88+NzV1oT3TOXf6XFEU3kANs+hAo07BZY2aqWVBo+X+vl2kLOGivoGFJFiqMp4iEVAVo4BKr15NXf5bsvqUSelRqPv6KlJtkgTY9847e99+y9hMwWxNCIEBw9AooSzWrFt//bVXJad0/XVbVi5fcXTiNLGyMWUQIjLOiUQQ7X79jTf2vnn3rbcaNiqhYhde0oVZlZwIzjmCkDIb7nGkmNnHCCJmPnrs2Lf++ttrV//+koEaAV40hRrEFkQxqEpwub3lpm3bb9qWcpT9/LDeIjYEgpL+wth6Qago87/Q+WsuShEogPdOnj19YQauFkBg65gNsYhQl9PQ9dMAhKJaURLNY1y/fOnaoeEG4FSJqK3aItq1f9+7rZlidHDnkSNvHnlv9623fuL+B25Ysz4DmoBjI0ENm0gRgFTsOjZ9rYGLr7/+bF5rH5s09Zqxh7YCPb/zled2vWbYZVk9qw8NDmdqYlAfvbfOzrVbBWlbpMEGiKbb0qtdvraSdMlq6dYId3sBfAxGU6bDJOaDEBMSg/cyQXoKkxQqKoiRiBhUMW3ICHBu+sKPn3/h/PQFW6sLc1qcxnDwpUVk0PZtW9evXpUBIGy56srrtlzz3vHjAWSollIixlgF2NmjJ088v+MnN267YTDPFHoJ4bpaWt57m7GC1q9fOzay5Pjps6bGQkTE1tqK6ihiMisx/Iev/eXs7OxnH3v0pq3XKFNyAmQoCuCMivggbFmBoihreaZAWXrnHBMYiBINm8TK/eW8dZcA1O0E6bXiKIgEFIk8MBdx4PjETCfIUIOM9UEcmSqFRWBlQXIzIsSkMCCjMTPUUKwZGRnLE/tLg0Ek2n/m1CuHD1x0KIx1JiuL8PUXnnvj0MHfuu+BR26/a3W9Xgdqzhalt5aJKscgJACYzC8RDUuCXCmfFUEMYnLWNIYGx7zCUiYR7Y4XI6CY26wovLWZYZcq0b02g8oHL/LNCy1DCMRWJRK7SLbai3BpGWaejx1DSNCOgUQjTWlnsgyOETh67PhPXtzVLsrM1oJEERiCtbY9N5dnptGo33zDtqXDg6oiIkuGh6+6ctOPnn2+VI6iAgGZEAIzRNHpFG8fODhx5nR97VpKjnpR+7pqQsaiykTbrr9+44Z1JyfOMFRIQ4zMVkScc6oqIShIVL/5ne+++NKu67dsvfvuO7dv396sD6xcOgQGMTO4DIEFRJTnWYiBiGwFqyWEivgaQ8UPsz+/MUci6mW7qI8AL1AWD5OFoOrYAx3g5Fw4NnVe8jwqqUBEYDlGUcOiYf6uQIXUWJYiEKKJ5WiztnbZqKu69jSAC+CNIwcPnDrRsaz1WrtQzl2ZDew5f+7IX371lX3v/K2Hf+PmTZuGFA3rAGWpOqWiSmSNlIIJg0XumS7t7es3G5lnO2hi/hIDlmA9crKxiNblpAZK1lhVb2DURydWoyEhB0Pz+XJZ4GlZCcpY5LMTLoOqEpsnfvT0gYOHJIbcZd57a10ZPIMSWjWGJHpLHEO5dvXqv/O7v9eo56wSRSwbIhIRYtfqlC+/tvvU6Yms1gCIOZFTxBdlXnOdudmrN1697frruGICCkRvvvGGJUtGjp8562qDIQqIjDEheiZTbw688eZbzzz73IbfedwZq+IlRmedxAiixIwBRBXMxgPj40t/48MP735972xRmEaDEu07M0XpAdTr9WJuzisG6vUTp84cPXHyyWefHR8fX7923datW6+/9qprrr5y9YqVbFOfBjyUiGPwuXM+FJZN1TAkYohF1Rhjf9kkSFX10KBwVRuqkDGlomC0gH0Tp84G73MTYZSYGZE0aqgqEqQEitCoEjQKiEmiL2pSrhtftbTZbAAMBEMlcGLuwstv7T3faRU1K6LGmJC+lUDgZ95+4+0DBz71ofs/8+BDG4YGcpARwyKqEQwmjtDUzd+fB1sU4rzviaZ2wwrECIgJMCpGYKrauvT7UxIijaTMytztfqxcctUBZfpxPnftWheyupn5pdd2v7TrFUIKH6nwMavVJUQitYyyaJNq7oxE/3f/9u/BMDOJMFEsyzKr5SEKAWcmJ5997oVO6fPBRhFUVckYjZGZpfSNer5pw/rxpcsI0CgE1JzbuGHDdVu2njzzY4JmxsaE0ZktkfjObKvY/ebeiTPn1oyPWTaA+uCdsUQUQkUUURLVEEWtcY88/NCpU6f/jy99uV0UwpTldctGrJRlOTMzU8+zWj3zvoQzNVczxkycO3fk2IkXdu4caORLx5Zs3Lhx+4033HbLLWtXrx5oNBrO2Swvo89sHoJXFQPtlEW9XkeM3vuf36yJ+m16gVIJCGRESS0lLZuzpe6bOHmBVLKaQIiILQtRNATAMFNqUEq1YgKLMtSU5XBur1i9og5KabtILMCRidOvH9gfjXE2D+DMZIV6MhYuu9huGWtaofiTH/z1Kwff+cS99z28/dZllnNmDZobIxpi8JnLqwrRwoyk/jR1mhSJxT5fW7WvECLIgz2IhYUQhA2UI0zquVJi6fpgTgkU6V7CtE70Er2b7jJSVSZTyzOIRgrNWp7+4nwi+5dsiFXyRr1mjS+KFUvH7rvvgUYtE8AwMaxCy7KkLIvAq6/veX3vWy6vKThI6fIMEioXJzIyPHLrLTePDg9SCvWZFbp0yfCtN9/03I4d7aIjbDlzqe0QTEocRF/bs/f1vW+tGr83JpWeLv24lz9nYoBJY6fTWTLY/L3f/Xx9oP5/fPHPzs/O+E47cmGz3NXyovDOcqc1Z4zJao0QQvCR2DaH6yJhpmxfPH784NGjP35hx/DA4LKlozduvX77TTdctWnz1VddyQBbZyy8j7V6PQSx1jCz/Xm9s2C+uag/cKxQPrMkzRqgAxw5e3qi0y6zjK1F8D0KbyIYQ6KqShTSbqNn8I5gJKwaGl05MOAQexWVsxJ3vfXWyelpDDWVIDFGikQUi8I066bZjKEsg5QF7Th26MBXj+89fOAjt99108YrBq2h1HNAEkQsG1XtcShTBbqiH71/Ae9yyISVREiUgrAFqTAp8bz8TQLQhMuXWxaUVFjmo1JmhSTjEJmbm63nNTjny8IYU5ZlVm8URQHSGBFjyJwB0Ol0tm/ffvPNN3cLouJ9yDJLkAhMt9o/eva5MnjXHCxjNMakHYOZNQQSXbF82fbt2xmQEInIMHdCYOu2brlm9aqV+w8dpcyQiiEiIl8Gw7bWaJ45N7lj565777x9ILMhhHqWx5QwMbYqMKuEEJzLElt62fDg737+t7ded90XvvTll156peWLdlHU6/VGnnXarYFGo9WajaogyvO8DB4AyLisDuQqAmCm3Zk8eGTfOwe+/q1vr161aus1Vz9473233HzT2pXLyZl2GZ0zUcUQ/9IgRHvtb+RD6Uym4BKIwAXgwMTERRGf1awowUCZYgTEGKMSk1mDxLJhEAmMoMEy5Ny1y5cvg2tAclAkKoFDp069uPfNDhNZo6KOjUiwxjiXd2ZnYQ3nmZeCGrUO9Nhs64s/fvKlffseffChR267Y2mt3gDqNivKgjNL0NQPbi8p/NP7RIyXCpEpITCC0cDQRGQRAMKVup12SQFVg68kdhLPN/wGQmCIpmpUKrkweiQbVSaKEJVSY/Rlu9ZoZjXnY6kx5pmNMTIJQmz7YtnY8PYbt9Uc+ai5mW/utMZ6YO9b+19+5TWw8d6DXZZlZVk6YzWWhjSQXn311evWrI2ihsiwSUk3BTZu3Ljl2quPvHvMWBNS9y9xVLGcgdQrv/za7v0HDt5y/VbVKEDq5jW9QIuYWRhgNmWUoBjM3R033XjLTdt2vrjrr5/4/muv7z124vjMxYvGmLmisM5YwzHGVKZTUqjGqNYaMIuIsa6ZN0hVYzh1+tzBQ0e+/8Onr75y0+ce/cyHP/zgiqUjEZBSIsLPa9ayuMSlYCASMzR2KZcKeODs9OzE1LQnigwoDDODFSIiBpFFtVt3IABBXNBMJLZmlo0ObxobXwLkGpgYsG3F20fee/fMaTTqgUHEbG30QQDfbjeaA+1QSquNmlOgKEvbbEq98ebkxJE//+JPdr/y+Md+69bNVytQy/IItQuRNIGSxF43vfOzQDY4gRIBAyRgUiJlCFVbVsIdUajb/s0LLhkn95wuXrfDhRNhqD+lQCQWWrTnHJEhtGYvqGpqfBTYsmjXazXfaUuMV12x7Tce+TADtmvTzrngC+PyKHjm2efPnpt0jUYECSJiMIZB6r231gwNDG7fvt0a0ihkWCRCldkKMNisXXPNNT986pm279isJlGJYYxR1U7picyxEyef/8mOG67f4vIsRHHWEFV9uAnlWWOjeBEQmGEMqMaq4AfuuuOeO+945+CRV1/f/fa+/a+/+cbExMTMzMxsqw0mF4JxGUF9iNYYERVRgo1CohBRFcpcrTHoapk99N6x/+Gf/fPv/fAH//C//Ae33rQtzyzJL9hGIJXbWejiTLdSIMAs8O7Jk7OdQvI6GcdRDUhjcKnTT2GVIEhaCyF4KspMzaBhZ/PN4+PLTNYAMq9sUBhMz8y98saeuRDK3IUYjbEheFGNWsKgKNtWAWPgU9eoI7Yt9WawaRTPHnznwJ8c/9iHPvSpBz58xdBwU2G6wDpxwXlhjLA4JaLznQScSqFdtQxWw5IZcSZmFC2E2CByVAqpqwTJ2CHUZ8jJ5pURAFKGsvbkV7vUaVKISIjeWbrz1ttvvvEGa62URa8wDqAsi3qehxAsm+uv3zrQrIUQcmu72hUVVNp34OALP9kBw9ZaIi4leu+zPJcYmVSCv2rL1du2bROFM9wVTarEcBi48frr1q5Zvfedd5zNFVHVGGIlUiJiUxSdHTt2PPLAfVuuvCroYocQYmBDhg0DCe5qFEYI3pPLasZtvXLjlis3BuDCxdbefW/v2bPn+IlTk9NTr+3ec/JU1Y0mohFkrbXGBYkxRmOcy10IZREDgoLc4MjIT156+ch/93/7J//9/+PDd91Vs8b24eM+1uxl6W4Kqrr2+VJ6k6gQ2wjuQEvQdLs8fvpUEQqb10iVJZKERACxIJaoHU8arWVrLRMya8frg+MDzfHhxo0b1qaeRSYWpVYp+w8f2n/wAFkjUBgm46L3cBlEEbwBCCRS7XeREFQUAufa3uf12umi+NPv/PUb+w8++uBDH7n5lgZxDjIAq5JWIsLSVc3rUxrqcfdAYE698TRfgCdlUjLCpETgVC+JHC+JsemncQ9IFocpyqrRWlv4goQfuPe+xz/zySiSdWOx2AUrOs+2VQJJUlUhYuYYo3V524fnnn3h0OEjLsujUoyaZ3kRfPDeEmdZPXTmrr1269rVK6qNWMmwRZ9K0jVbr7n62msOvvuuiDBV9XYmbtTqIYQo4Z1D7+7es/eqK69iQ2UER3UZq0ZDzMZGDengyrKTZTXRYEhAagyJCCmRIY4YHWrce9vNt998U2bYK3bsfOnM2cn3jp3Y9fLLBw4ebrcLX5aa5cYYYiMa2+2QZTar5cSkglJCbWDg9NTUH/3Lf7Nh1eqrN66zfZnUfsUnqZzWJUi6Iv31pVmTMmGMCssCzBG1gYmpqanp6RqbdllYEHmvvszAGbRhzHCtNrxseKiWDzbqw42BseGhgVq9bnjYIQNsjEPGQBDZtkQk431HDly8OEUN1+DGbNAQI+cNCUpETFqlNZg8IhtDRBq8YYOoREbIFM66wdrLJ0+98af//rk3dn/2kYdvWbU+B2pEORmVmOo1AaIRltkQp64Y7kv/9OvXpq5i09W1Uer1yxKJgllFSRlKApYk2MFVijDB9LTVCQm67rxbIEsQ3kSBYReDFxEDWOasqnOgd8/6JSZjDImuZNhGiWRMBCbOTf7kJzszWydYiWyNVSGjllgh4iU0GwNnz01++S++qRVtQyFay7LC+8KHvF4Pqq2ON7YmBAnCBGa27CRK9JJltfMzk8+//Op9Dzw8NjzgFNaSlkKOVERJDNkiemsyl2VBorE2ird5rlBBJONCFKhamODLnBSBa9Y+eMct6TpcaP/u/gNHXn5193ef+N4be9+qjwwXoTQuc5mJQVKrpBLIOiZY4kPvvvedJ5645r/8BxZK3eo3dcWFdXGqI+klV4LkXac9H08pKTLrOhIKooxoslMeOXigNTU1vGw8E5WiGGjW125YPz4yYiU2mJaNDI01ajlgAQu4rtZJajmxxqii9N7lLjOmpfHuO26fDJ1vPf/cqcnzw2PLZkNUCtZmwXtDVBYFGTaZAyV9IAVz0h+KABgB8AakphPx7V0vvrH/7U/d++Cn7n9wTa1eimTMKoFILXGS75DKFwPU5R90V353F5tnGQsJSAkixKYr20JVYZH7HQYv2BW7z0kX7ZDa1XZKijZJ0sBUFAOhKq/Kldxq91YYwyrCpImlk0Q5dr700rvvHS18mdWsMkWJBKtMJnVWGkTBt773va/91dfrSWEjSgyBmZgNiCKIDLPNrLWqzMYYY0WkXbRSxiMi5vXGK6/t3vv2vofuvsUoICDDiJEsxxiEyZoc4NjFXcx5qV6ULCfkyAB8iM6muADBlyCyNlNguJ7fuu2a7duu+cwnf/Nr3/jmv/qf/liI65mdnWvn9UaiM6uqipAxYEPGvvr67gutOatE81dzgY6W9gg3qfjQV+fVqgVCqmZaJkKIubGIEowxnc7KZnPsxhtXrl2XZ1m9Xs8MO6YGIe8aSdatcDKQUmyOWIGOKogMgTOXZARdKTetXLPxs7+zfeu2r3z/iZ373xoZaAY1F2Zm80a98N7WMudciFGiJKUFICpxJAASSZmJoCSiROLM8YsXvvTX3967/8BjjzxyyzVbmkCNnYEYMGIwIBjyPrS9NOoZ97ysapfjXy3pyNLVjYSwdmWYFme8eyEjLSQDJpM1oLA4ZV15DEb1hZRCGVKogAwI1KfB14VFKinUUyViAl2YmXv2uRfOTJ2jLIczZEwoA1EkIq/ijJ1rdRpZXhtoNgYGmLnT6eSDLgX1qiQAxRhVYBiGU3HeI5JJrVxgQxrBzOfOnXvmmWfu2H7jcN1WmVIiFUl7ztkLUy+9/GpZlrV6QwSAWGuLEK21EtGanV02Nrr9phuatZpRgUZmk6o5ZRmyzAIoinJ8ycDf+7u/Y639X7/whdm51kCj4aOCDDERkcSoRIYsufzgwcNnzk5a7WuQ6pd2474ZEouK51IlfBmkDOaK9hlJohU1xqwdGRq7+aY0WqDZXRBe1SpZqpQTCBBI6UvnagCdn52emZk5eer0XOFffnX3hjWrH3now0PNZkZwbCAYIDy85forVq3+5rM/+v6uHSdmpocz68tWLat1vA/eG+fYGEk56X44yyRaybIo0+DIsBRh1oen9rz6+sF9n3zo4d988MHVgyNj4LkQB4wFID663CrQiSFna5JP7eojap9bTXQl7W5l2gMZ/SQkvSyzql/mMeWXLicl01dSn/9IvaQcVlHzhYgkKgwDePOtt/a8tZetyRqNMoRKGZtZAQkR0GazGcoOKdjawpcAQlTviyzL2BiIGLbOGgDBizEGhoP3ZNhlWYwxpqESqnlW27lz56Ejh7dvuSpqTMwUIhiwAq/vefNf/P/+5cmJczbLC++JyGZZWZYi4kxWlp2bb7jhn//Tf3L1FWs0GtZKTCpRigmIMTbzrFV6m7mPfeSRJ5586s233y6LAGN71tmjKzKz935qasr2rvpiLrto//iI7mWW+VkZEAV5iRTAojZziNEyfPCG3aCBT/DRR2ONJeTdjw+Kubm5yanzF2dnT548eer0xJtvvb3/4IEy+KLjL1yYuTB1cWCg8cLOXZ9/7LN33Xxjw3EUZBGwuG5kdNUnPr19y7Vff+qJF99+c5YwK5LlTbImRBHvyVpmJyF2C9rQNOmDAJKoPF14o2qZmkuXThbt//3b33x531uffvDh+7bduDKv5QBKYUbw0RvJjEvM5kskcntSv9JNDb5fTxn1rJkuaR+mSp0/NX1dtmuu4pCRXq4ypFhY8TUxShAxBnOd8qkfP3ti4jTlOZhK75NnA4kBgdmXpYWDKJFK9ExqnfMxZslkY0w7tpTCzNZmZVnUGnUxFGMQZoX4GC2ztdaXxYlTp/bs2XPTlqu6RhS9FzUKNi7LvbIaRzav500fYxmlNjggIpDo2EzPzk5fnA0KBqxlqAZfOOecMxK9+lJgM2sBjI0tWTG+9LU9sZabSCSVjyAiJmKRiBBrg41arW5J5fK18eRQlJUkFcB4QXQpoml5OJsRAVJ6ZoYxjhCDdkdCwDozMzN39uzZU6dOTZw+ffbs2ZMnJ06enjjy7rtznfbFuRZZEwUdX7osh2ozaywZHWuV7W9957t73tj72Cc/8ehv/uaGleOq8J3IpEtz++DmrVdfsf5Hu3Z89Qc/3D851ZaWWmesBZOKQj0pMYgVAlaSyFTpkBLAZBrNUJTTRTHQHDRZtvv4sSN/9sXde9949IGHb1m/wVhuMCzAMEHFpLRDV9PcdEV2qUsxr9CCmoq/2schkT6s3MuxLGokweXUEVC14bw/qVAvXwgVqHGZAkeOHX/l9T0RZEBJSScVtyVEJTaqWebac7OOQJbFByIK6lMcJSGoqrPWGCNEEqOEjjNctjrG2dT0y4ZJiJljEDZWxT/xgyfvu+fujWtWhhCMIetcmoMFY21WI+uEjShMrRYLL6Cg4oxV8tMXZianziec633MHJnEg7VWNdo8F4kiojAhSKtTWmvLKC5zIjFR7ogEKojivV+6bHTFihW2txmqLgQcKUxE1e3cu/yprVhhmA11e/IkwGbOK+bm5uZananZi6cnJ0+cnDh64viJE6fee/fY2bNnQwidTme2NacKYy2zhWGyTRhrHTdyFZBlljJ0JGR5o95ovnfq1L/+X/6XV1599bOf+uQj9z3YqJkMKIG2L1e65mfvePjGa7d99akfvfD6G/tPHMuGhtzw0Jz3pQ/W5iwCwHZ1+qN2Q0BnSu9BjDybC54A26hJlG++9OJr+w988sEHP3nv/cuyWqZoEpgYKYbQ3kyMpMBMBBhho2y69DteiH26EAXSFRy4zDQvZSgpWBfmTJl6Iu3cAzyUipi8sPi5qA5PFkAryo9feP7oxISr14UA0cy5JKYXRJkEwQ8ODXzqkYc3rV8LUe7u40FEEJ1zRBRDiEEreUs2b+3b9/yOHVMzs1meBSVLTimSkqg6l4vitTfefP4nL2747KdBRgkxBjYWwOjwyNKlS4+fOm0zgqIoCmutklrnmBlepy6c3/XKrnvuvnUwc0ISBIa4jCVbMtbGEBRMxgnhnUOHjxw9Si4z1lW9gkkCuNKhiAS5adsNI0NDtqs3Rcla+7v3tKuAiHmXzgrixDsEOgHnpy+eO3fu4sWLx48fn5qa3Ldv35nJMxOnz548expkWkWZZ7UQxBiTqlNZY4CNCyEQGZtnKih8ycTGmBiDCrGxZLjwJQmyRkM0PrPzxXcOHnrl1d1/6zOfvWrzBhEMuiwAFrpleMU/fvTxmza9+tc/fvrVg+9MTkyYgWajVouaBBiThgEnPndMAuZM0AgYYy1ZiyheQuCYcfNQ68K//dbXX9339ucf/o3br96iQKawRFVLZqpALVS/JQUrq3Iya+1R9bSrSdNlGCTsrH3mKL2e83mO8nzplipyVZeHk2AKxfeVUxMRKBkTgHOTUy+8uPPCxRlbqxORj+KsiyEYYy2RgYbgt1555T/8+7+/cmxQApyFD8hs9V3aT/vp4sZjJ85OHD/xyuuvG5cFqMY0c4FtlrfabVZqZNlLr+3+6EceGRtsel+mfCgDG9av3XzFhtdef11CIGvqznmJSSJntjXTrNc99Mmnn9m8ccNvfew3huv1qJHImKwh4BCDtTUAHtj7zsE/+pf/+sSps8gyQLVXNIIwlBAMKZjvuP1Wx7BRYK1RpWTtxhjvo7WpV569KDOlb5ppzczOtaemLk6cOvPeseMnJ86cmjh9/NTEucnJoiimpifBFWyHYdhcmWtZDrDLkyuixBaIqmRN0oRVVWtYISrqCETqYwTDZHlEVFVmlw3aUxcufOkvv77r1dc//9hnPv7Rjw0N5Qxwqc2McuCTN2y/ccMV337+6b/e8cKx2WlPCMaSdUKAslQJeGOVRaMmOQ6R6CODiEjYgE1hhRr55MWZH731xsGjRx/eftunHvjw1cuX1YGiDHktQ0j5OAYhBDGGnM29D6nsFwVgoyJkqg6+dIJRgnOuq2UXneFudZOSkNd8YEsLxayJVKn0IdXngiJjdMVW52GidiE7MRNpykbu3vvGvkMHOHNkUhVTBWqzLPpgmMtWq5G727ZvXz42yArLMACzcIW2tA8vUW+RLRsZveqKTW+8uTf64PK8U5ZsrSgVpWS1BoLvlJ2Xd7/+8u7XH7znLmMcJBig48NgPb//nrtfeumlE6fOWFMj1ug92CRfFkRtrX767Lk/+tf/+pnnnn3ovnu3XnvN6Oios1kKHufm5vYfOvzizpeefu6FY6dPZ/VBJYpKCjXGGFJWSCihYWbqwqd+66MP3POhGLwlm4WkrW8MA3NlNMYpAZZOnp85dOTw1MULJ04cm5ycPHDo4PnJ6RMTpzvtsiijEgip9YNgierNiriYROK6ecNKIEe5KxEk6Yr5GIiIyRKnhrzE5iObu8IHUjHGxuhDEEu20Rz0Rbn/6Hv/nz/6//7kpZd/73d+99abrm1kHAIGLHLg2uGRNR//9PZt277ygyeef/MN326h0fRQV29Yl/mOj6KW0+SXmPLuqiClCE3gOYrMqdaGh+2gnpi88KUfPPH2wcOP3HnXJz70oeW1rABMEjMQz5klywJ0ojfWElGQBGKVDSmTSFCohMBQmwhGLhcImaRyHIltkn01xkCUujnEeTaCahpqkWVZCCEoTJXcSywU4cUcQMQYyLAQnTh77sknnyw6noiCiHMOkBAisxKTMSawjo4u2XzFOgOQxiQbzRoAA5VqfoH2U35YFIMD5s47b3/qxz8+fX7KOFev1wvvRcTarNMp6plj5rPnJne99NI9d9w24CzI+LK0bBn40F13vvPOO//T//wneZ615lp5syEg773LMgA+BFurB41PPffCs8+9MD4+vmTJEiKTQoJOq33u/ORcq+0BtllU8UHyPA8hsAFE262LFiK+fPD+e/7xH/4X1qghtXNBrOWyDHOtzvTF2T179szMtY68996p06fPnjt37NixVtGZm5tL9VjjrMvrCojLmDlVHDnRmzR2Bzt0lVCrMRGkEAGBmECctFlUrctVVTVGkUoWgwkGbQlCktCZgXHWqEin06nntRhNp5x74qmnXnt9z+ceffS3H/vsimUDDJgYSi8DtezetZs2/+3//Ee7X/3qD7/39qmT+eBAKxSdTgd5bl3mgwBiRLnSSKdIfU24NleNnSCdsmgODlCttvPo4eOTZw4cfPtzDz1yw/oNw5k1MDFy7KYloorJLDvLzKISVbWaLCOGmJjJsLMs0RPy+YaiLsM7BbWsEIlkmBY2FaRxf4aZiExSp5T5CUbzUpfdaZxsTdraJyZOvf766zFGMkZVi6IwzgJEhhGl8B1ANm++4tprrwYQNBiuppKqxt5wU+0bRqpQIVah62+4bv3G9WcuTAFotVpRtdYYsDYLnTaTkrVl2d616+XDh49ce+UmCwXgLEfBYM09/tufDb748le+ZglzMzNknHW591GZLNsg4qx1NYQQJs5fOHluSiKUTW5NEjDJ6vXMZklbXlU1hmaed9pzdWd98JbpkY88/A//8B9sWrvWaCCoff65Hc+98PzxkxMHDx/yEa1O+8LFWTVWVW2eKdhlztaHstxKhLHUCZ7ZciWlwGmmjiIqegnjhGUpqWFIVykZSgROPB4ChTKkWSiVOHlqugfYchJOzohjGcuidGyaea0oiizLmoMN+Hh+euoLf/rvd/3kxb/1uc88eN9dI4MDSR24I7rW1R+99e6r1q3/y2eeenbPa4cnz+XDQyGG4D27zGUuFgUhRmGpNAg4BRcaoskckQZVbxhMoV6bDMV3n3l68/IVN2zaHKqaoxIoQA1IWb33rdasqdfBZIzTqFVvrEBDKNqtWBa2UgUhRve6AKIMQll2oGKUTLdNvp+5YAkQQcq6R0AlAbbLSvkk8aCZ1tyO558/e/oMiF2eU1ST2Rhjp1NSlhEEwQ8PDty8/cbly5f1im5BgjUVX5d6cszdITRpfIsSRkaGrrnmql2vvmKNCsFRxhJCxzsm9V6kzHJ39OjRHTt2XLP5CoVmWSYhQjUELB8d+YPf//01a9d/8T/8xZGjx1udkrNMlUKIYpCWX62W1WqNsixjjHk9U1D0IXMm3aKiPadksiyzBF+2L8xesKqzMd59562f+s2P3/+hDy0dGaIu799ee81VO3bseGnnzpl2qzm8JIrkAw1Yp0JgCqLCZJwhNlCJosZmVapIJEn2QlUlkKkY+USGejSKlECosjBEZJIDV1VrnWpKjkrv+jJJWRYMsGoQb9XUs4wUnXabVYvZWWJEX5ZFYZuNfe+8+a/++L3D777zmU99cu3qNRJCw2YByIE7lq+55rf/zt3bbvjakz/YdWBfx3rUGh1feKHMWEnTNdP8CFKjqbPBSPAheDgnqp5gm/ViZnbV8vHxlSscIUZ1RDYRpjUwOcsKKSl6i7z0QUTKTkFEubMQOGMoCjQapkSmDsE765hSeaiSFVXfgVgNEd2xn71B0TGUJGpIDeAMSFhiZJs+rW/oZvcCWrbvHjr8zI+elrLgvMFlLNst4wwbZEQ5xU6nU7ZbG1ct37blWguIBNcVuUx1C02tiOjz2Yzu1C2qWb7t1pu+9Z1vnT5zrtZokpF2p0NEuXWqMdEz5jrtHTte+OTHP7pqfFkSuLHWEkiiDtSyz336t+688+5nnn/hO997Yv+BQ3O+9J12IdJo1hybYmZGpBLuCT5KEjA3Kj5EEVX13ndibA40xgaH8iVDD953731333XjDTfUrRto5BKEbRUc2DUrx/+H/+d/9xsfefjfffFL3/vhk3mjmeV5xxcua5QxqKohR5ZCCBIiWyNREnmRqkQXpZ6t7tjf+XmEVaRKKQRJIZGkOICIOp1O4g5ZpuTYq5iJAMCIIEooy6BRRMqyGBkZWbp8eXOgvnrF8vFlY1es33DFxg3Dg0PLRsfWrF5RZdEJDghlkVm7hM1Hr73x2vUbvvfC89945umj01PDQwPRsIC9KrMuUgnznSKr14QJJMEHQ1zL8qBy1VXXbt16LYDcpGFvqpA8dcHEMDo0uHx0CTLrg9TzWhyISfk3eu+cyYyODY/AxyrD3evIETUMAZaOji1bMpJmq6Ir85ewMjPH6JkocyYGNUysojGi26lKCxU50uuPHDo4NzM7PrYUNhfwyPBQDB1miMAYI5kzI8O3XH/9NVdsYmhy/90qXTUFs0p/9dfxKzZMANstV111/513vvDiTjYuqKDZqOYEcGotLRHqp0+ffvHFFz/1mx8nhbUWRNrVQui0y/UrRn/vM7/1yY9+dOL02bcP7n9r376jR49OX7xw+tQESKy1zFx0fFGUzLZerye5H2YeHBlcMjQ8Pj6+deu1m67YsHbV6rHRJXVT6WMRUHTabqAZRYiIvC+MzYoQPdHXv/Wt/+1P//SdQ+/mzQa7nIgMuyRTIyKG2FobVURSXyJ1ZW4SpRFSSY4DsCRV5rvisXVf39PUNNTVg9EYYwwhaIgSfcakMQ4NDY2Ojjq2A4PNG2+88eabb8qybHzZWLNZX7l8vGYMdUdppeGrqSLiYyBSx1YgKtQREevmgJ1HDn7t+9/fsXfPhRhjc7C0NhoK3dtHUCJybIrgIZFy55Riu3BBR0T+q8c+87fveqChGFCYUEKjMpHLYoxKfODQe1MzM7VmI7XThhCYbFJ4ZubZixdGhgeu2byJ1FumXs+kqlFQBE6eOnNuajJJuncpqZqGeMQYiTSWfuO6dUtHhhG8S+ViVEhvYe1GE3I7duLkxJlzWWMgwnTK4JyxFFV8DMrMzmVlu71kZGTjujUqMRFquxDGYD41j0stW7s9L8dPnDx9djLL8hRrEZEPoeqEERGJ6ssr1q0fqjcb9Rxeg4p1pgzROAOAI7z3We6U4JNMODB5fmr24kxyed77EKJADTtmy5UCGA2NDI8MD9g+YjADUCk7Re4yNka8VyIyDCZSCVEEbJTYAwePHfvfvvDvf/Cjp2ZmO66WO5f5IEmqgch479m4tE/2DaRSMj37TpU4Bjj1ACm8kJDM15BFBKLR+xijRjGGhpoDY2NjS8dGhwYGh2r5dVuuvfnmW1euXG6zPMtsntskrxgUjsBAp+zUs5rEEqKO8tRpFKvCtEQJlhhRRCnAlJYD4XQM33/+2b986sl9Z88V9VrMrbeJY6RE7NiEEIRAhjUGR4aLshZw9djYP//7f3DD2PImUBNUygcKgRKRD1IJ7mO+4AIgCJjA3YlyEoNlgkZiRhQkclzUKDDO6OV6NBZN9WaJloz4Isn3X8asUc3lMMYpELoKzWmXSO7dizomERhGCIFRTUoFALZQnZ/JuFCsMP2i9J3MZaIAMQNJHjgoosAaSHfMe8UICNGxgSqneoghBcoYDanTJKemMSqYepr985qafWNxtY/JkY6uDMEZhog1tuh0El+/025nxrLLYwhsDZL0jjHGxwDmIGqtbcf41NNP/7svfHHPW2/n9QY5F5XAJsWhYJNIj90B4Jqm+8QY59k5SahKFCLQEGMljEmkzthmo9FoNJYvXTY+vnTd2rWrVq1avWL5qlWrxpctG2g0aubyE1mrnlqZpxx1+6mqfGJVo1btLZ5UiIoMIRZgNpQnZma+8N3vPv3G7qPTkzTSLAwHkDNZCJHJKkEkWms4eu4UQ4rP3//gf/uJR0ei1tjaqtIXoawLZkrwfMjWpwGl6MYMEnutQ/MSW6lYS5dpMkg9Dek1XE36qjY7oi6V8pLOhETw7xoBVTrZqsaQL8ssywpfksIYk/Cu9z5zWfqa2O2l6N677pT6/qkSMRpjQghRJbPOx5AeoWwtA/ASY9TM2bLoOOdSTSABzhijtVaBsijyLI9labJMkr515kIIbA2ByqLI87yan8Mco6aBi95HYwwRYhSQMLOEaPqGjBFVeWNBpRtbzd5LSURREYCIPfT8hYt/9n/+hz/7ytcmzp5rDI1EJTbOOBujGOcg0XuvqpYNsUYfAGFANcYYJUTRCMCAmrV81fLx1avXDg8PjgwPr127esvVWzasX1uv12tZlrnq6HpcIsJlppAsUgxa2HUii6Uuk2Uz95jHaZ6hANNlOWvd82+98ec//O7Lh/bFeh6s8wG1xmARoxJ5CEs0ZTkgMmbc//v3/+A3Nl89FCpOBYMubXjpq84uZKPOm69etkemipL7hiQt+lgsvBS9cc4/u3N64QUsyzKlwHsLIH1pCCGB8t4xLDqANBsy/TXGmMy0aoDPspB0pJg7nU6ikiZt8qQanCBZN0iIqOYidO1PKjHBGIJxVkRirJSZOp1OrVYLIQjUWivdi9+7jL0D6x1zb4rk/LWKPlSjzVRTlUQAa10RVYj27H3rC1/68g+ffJpcltdrRcdba4UQitI5B0qxv4oPWe4y62q12uBgc9nSpWvWrFmzZs2y0SVLx8Y2bFi3Ye06151ZUG3NXb51d6ZEdbiWzWXvUNofLm2mUo0/3axVNaYEMJDINzPAwYtTT+x64Rs//tGxqSnTHOqodkBiyNRzo8ozreGod26+9r//e39vU5Y3Jc6z8Gh+9NbiPUUrseBLrfOy3V/95n7ZU3uft/Pf0KyrG+p9coFElJSqe9ezZ9/p94nVmUgg/YcqImVZhhCazWa/oXvvk4RnVU+N0TmXlkpypb2X9faBGKNlw8YkmWBQtQn0jiTtOemVxlrttrd57733jUYjHe0iVz0/DK3n8kLpjbWgioNijCl8KYBzWQJM7SJ+7Rvf/PKf/4cj772Xvj6t14GBgYFGY3BwcOP6tUNDQxvWrx0bG1u3es3q1auXLBmu12sJ3QeF7aqMJmBH6Vo7V8VQ2svmUv8q/Cm3v3+lvp9ZJ5zAzAqKoml7IoV40YxngAvAm6fe+8oT331m58sdyzwyMhtDYLDErFUshfuvHv/bn7r9tnEg75o1d3O6lzfrLh994arTn9nXqH0ys/2ndvmW4Z9q1v0flZ4nKk6Cmu12e3Jy8uzZs2n2QFmWy5cvX7duXaPRSL/pqicv+KikgL179+7XX3+9B3XWrVv38MMPhxCccwnV9BztwYMHn3322fSNRVFcccUVt9122+joaAjh0KFDO55/Id3lsiyDxCSnlnx/b2nV6/UtW7Zcdc3VIyMjEqKqzs7Ovvjii0eOHGHmWq123333rV+//rJeoKckYYP31rk8y5NMgDOWmQtfCtg5y7n53c89+qE77/jiF7/8xt69jVp25ZVXrly5cnx8fHR0dHx8fOOGdc4QL5I4n+8IqwpDACybRAsxzsXgU4SLKjfHgCZcdFmw0W8fvaPX/kn0C1/DoFQ6IYAYQRQSoZo764vQdDZn3LFy/abf+7v3XHPDX/7wh2+dPN6oGW9NZjm3Zv3osi0bNjariHvxWPVLlx/15RR+it9dhDQua+u/zKDJSzcEVd2zZ8/evXsPHDhQlmVVdzQm+SYAN99886c//el6vV4URb+/7A3zTeZ+/vz5p556KiFPIrruuuu2bNmybt26tB6SUTrniqJ48cUXn3zyyeS2Qwif+MQnarVapTQp8uzzz128eBHAkiVLlixZkpZcrVZj5qmpKQCzs7NFUTzxxBPbtm37/Oc/v3nzZgDNZvPo0aM/+MEPVHXlypUPPfTQZZFb78emQ7e9ZaoqQaKG3DmBFp0yKGr17Mp1q/7b//ofzc7OZsaOjo4Yng9RDSEkZaakq09KlAZiQ6COOSJJw3FqlkuzhzPb3UdMf0hI72cQ72cN77fLUzUNLlk22VTLjAIJjFBjE0AIcYOtLb3zri0bNn7jmad/9MquyU6LDXXOT93+oQevWb4M3Xavfg+9CPXOT5t9f4lK/Vmjfi+7aH9uMaLFUQdU9cknn/za177WbrdvueWWG2+8Me3gmzdvHh0dnZiYeOKJJ86fPz83N1ev1xMyTt5dRNJG3/tvnueVKmmMAA4fPvz1r3/98ccfHx8fTyAhYY+nnnrqhz/8YXrunGPm4eFha21RFHmeM3O9Xu90Osz88MMPP/TQQ0k0NaHwLMtE5MCBA3/2Z392/Pjx119/fcOGDRs2bEjrql6vN5vNdEgDAwPvE3hQ16wJWS1XaAiBSY211hnECEgoQz3PQSjKkGV2tFkbbdYAxKjixdo0h0gQ1RGxYVWVGEUikTDDGGtSSApJJRqkug2ZpB1fHQfRIoP+mwsSXBaGLjDu7oCuKkgiKHNkQ9E7kznDRRFHjLlt5cqr/tbjt23Z8s2nfrjrtVeuXrb8/u03k2iTifvslehvIkXJuMzEarrs874bs2gZ9AOtn8+yFx3Y6Ojoo48+unr16qVLl77zzjtvvPHGyMjIihUrZmZmjDF33333qlWrli5dOjc312w2k4tN6DmZWorziKhWq6U9asmSJdbaEydOvPrqqyMjI4899tjAwEASwN65c+d3vvOdqamplStXisjs7GwKKAHkeaUhGEJI8L1Wq42MjPRgT+/IN27cODAwkJp0Op2OqibT7yH4WI1Bop+ytm0PracBflXmyRgAWe5iCESUZzbtMl3ZJrLGdDNQpIjMRiUdbp+AkcSUKeqPAuf3Yu4TMUotC0KXhY7v561/pvVfBgQDRYjWGmMg0RvlWmagKAKGLB6+4cZrN2/+3ve/25mZuWp82SgTQ+0lbSqLHMNPt6qf+adf4Wzr/vPtPb/55puff/7573znOzMzMyKyYcOGK664wnu/dOnSer2+ZMmSsiy//e1vHz169LHHHms2m6+88sr69evXrFmTLLVnHrOzs7VardVqrVq16rbbbnv66afffffdp556amho6NOf/rSq7tu372tf+9rhw4evv/76e+65Z9euXfv372fmFLAlg06ZE2ttWZZPPvnknj17UiyYgtq0V8zMzJw9e5aI7rnnnk984hPpLLz3PXSUIE1/9uPSGN0Ss867hSrU7yXOjKtUma3l7sTAec9S3eCUkeXF44oTzFw0B3HxTZwvBPP7xUK/8I2n7uQH6so5Wjamu8bYcBJyFigxMSgDVjebf/fTj1rRHMhjsNQdN3gJwvl5D/WDtun3+1JVzbLs3Llzmzdvvu2227Ism56enpiYOH369A033HD48OHvfe97J0+evPvuu0+cOPHss89mWbZhwwZrK0fWSwgmhJDg+G233TY2NvYnf/InFy9e/P73vz8+Pr5y5covf/nLBw4c2Lx586OPPnrllVe+9tprRVEMDQ0lrz+fymQSqHF2tjUXJk4RUSirjEqCN+1223s/MjJSEV2sjTFmWWKMUgoxe62Wi8x6Pk0uf8Ok0YLW1P9kf+ZH2lWMVGVJnBVSzdKoEjJsxIlYlXS62k2wfNBW+Cs+V1UAe/bs+epXv7p169bHH388yzIiOn369He+852dO3d67ycnJ8+cOXP//fdPT09/5StfGR8fv/vuu1esWJEcZHKuCVuXZZmSYMaYPM+vv/76z33uc3/+538+PT39pS99qdFoHDlyZNWqVR/72MduueWWY8eOpVAy+fuUNOj/NGPMRz7ykTvvvNMY06w30od3Op0sy86fP/+9731v586dzz777JkzZ/7wD/9w5cqV3vuiKNJ7U77lsttm1boWutKSXeOeV8z/6dNm37fZtK+FlAD9BRzMr9hfXdKh3U2eU3c+YqKsqUYmzcGAcFJUVdH54Rb/aa5i1YMHD7777rtpZxeRCxcuWGsHBgY+/elP33HHHU888cSFCxcOHz587ty5pUuXbtq0aWZmZmpqanR0NO31yVUTUb1eT8g7xthqtcbHx++5556TJ0/+4Ac/aLVaJ0+eXLJkyWOPPZZyFI1Gg5lTyJge+6s56XNGR0fXrV3XU+tL7kRFli9ffuTIkd27d5dl+e677x45cmT58uXOubQm05O0aSxKLiXnzcx5nttfcrzsTzF6/Y/wPtMCkQ0GK6ICBLFKRsBITc4Aa6Skzf6fqkGnu/7xj3989erV+/fvn5qaWr169ejo6OrVq1esWDE8PCwiDz744J133rl///7Dhw8nLHHDDTfUarXe6MQUsSW/m1LRPaw8MDDwyU9+stVqPfPMM/V6/bHHHrv33ntTrrrnoRMmXlTfSfmQw4cP7/jJjvRdvUJm9OHo0aMvvfTS9PS0iNx6660bN25M8Wuq2qSQ8a233hoeHr40v5R+c+TIEUsQXuybGT9L7/k/Klyx6LD0MhBzvmVwAUeoEmNOffm91hCS1AWX+JrKqd5L73/y+h/x9SGiO+6444477kiONsHlEEJyw8uWLTt8+PCuXbtGR0c/9alPrV+/PmX0UsNVr5jXbrdPnToVY5ydnT116tSpU6dSeWVsbOzRRx+dmZlZtmzZI488kvxolmVTU1MXL14siiI58rNnz46Pj4cQpqenp6enW61WWZbf//73n3zySWNMq9VKKe1Ukpuenm40Gtdcc82mTZs++tGPLlu2DEDqAW+1WlmWnTp16o//+I/fr2yXqkK9Kh3/LGv5jxcu/2yzRp9ZL06pJVKeIvTIcSpQYYoQheZqUn6Iqlax/2TMurcpJ0eYsISIFEVRr9d7KY5vf/vbZ86cefzxxxPqSOmIHr2JuvqrR48evXDhQjKmtWvXpsxx4plMT08nYNOrhB8/fnx6ejo5Zmvt2rVr04cfO3bswszFXuTXww9EFELI87xod5xzeZ4vXbp0yZIlKWBNsOe9995LGKYiTl2uWpfO9+233/7/A0bARUriFaLXAAAAAElFTkSuQmCC" width="133" height="34" alt="iFAS by MBL"></span><h1 id="ttl">Logistics Tracker</h1><span class="sub" id="sub">IFAS facility management</span><span class="sync" id="sync"></span><button class="langbtn" id="upb" type="button">Upload Excel</button><input type="file" id="file" accept=".xlsx,.xlsm,.xls" hidden><button class="langbtn" id="lang" type="button">العربية</button></div>
+  <nav id="nav" aria-label="Sections"></nav>
+</div>
+<main id="main"></main>
+<script>
+
+/* Arabic UI strings. Keys are the exact English text shown on the page; stored data stays in English. */
+var AR={
+'Logistics Tracker':'متابعة اللوجستيات','IFAS facility management':'إيفاس لإدارة المرافق',
+'connecting':'جارٍ الاتصال','saved to your account':'تُحفظ في حسابك','read only preview':'معاينة للقراءة فقط',
+'Dashboard':'لوحة المتابعة','Daily Tasks':'المهام اليومية','Fleet':'الأسطول','Vehicle Log':'سجل المركبات','Requests':'الطلبات','PO Deliveries':'أوامر الشراء والتسليم','Dispatch':'الإرسال','Inventory':'المخزون','Follow-ups':'المتابعات',
+'Daily task checklist':'قائمة المهام اليومية','Vehicle fleet register':'سجل أسطول المركبات','Daily vehicle trip log':'سجل رحلات المركبات اليومي','Material requests':'طلبات المواد','Purchase orders and incoming deliveries':'أوامر الشراء والتوريدات الواردة','Materials dispatched to sites':'المواد المرسلة إلى المواقع','Stock levels':'مستويات المخزون','Follow-ups and open issues':'المتابعات والمسائل المفتوحة',
+'Your daily routine. Tick each task off as you go, then reset the day tomorrow morning.':'روتينك اليومي. علّم كل مهمة عند إنجازها، ثم أعد ضبط اليوم صباح الغد.',
+'One row per vehicle. Alerts come from the dates and service kilometres you enter.':'صف واحد لكل مركبة. تأتي التنبيهات من التواريخ وكيلومترات الصيانة التي تدخلها.',
+'One row per trip. Choose the vehicle and the driver fills in. The end odometer updates the fleet register.':'صف واحد لكل رحلة. اختر المركبة ويظهر اسم السائق تلقائياً. عداد النهاية يحدّث سجل الأسطول.',
+'Every item a site or technician asks for, from request to issue. Link it to the Maximo work order.':'كل صنف يطلبه موقع أو فني، من الطلب حتى الصرف. اربطه برقم أمر العمل في Maximo.',
+'What you ordered and what has arrived. Status updates from the quantities and the expected date.':'ما طلبته وما وصل فعلاً. تتحدث الحالة حسب الكميات وتاريخ التسليم المتوقع.',
+'One row per delivery to a site. Mark the signed delivery note when the site returns it.':'صف واحد لكل تسليم إلى موقع. حدّد توقيع إذن التسليم عندما يعيده الموقع.',
+'Update the current quantity from Maximo or after a count. Status flags items at or below the minimum level.':'حدّث الكمية الحالية من Maximo أو بعد الجرد. تُظهر الحالة الأصناف عند الحد الأدنى أو أقل.',
+'Anything you need to chase: supplier delays, missing documents, damaged items, site requests.':'كل ما تحتاج إلى متابعته: تأخر الموردين، مستندات ناقصة، أصناف تالفة، طلبات المواقع.',
+'Add task':'إضافة مهمة','Add vehicle':'إضافة مركبة','Add trip':'إضافة رحلة','Add request':'إضافة طلب','Add PO':'إضافة أمر شراء','Add dispatch':'إضافة إرسال','Add item':'إضافة صنف','Add follow-up':'إضافة متابعة',
+'task':'مهمة','vehicle':'مركبة','trip':'رحلة','request':'طلب','PO':'أمر شراء','dispatch':'إرسال','item':'صنف','follow-up':'متابعة',
+'Search':'بحث','Reset day':'إعادة ضبط اليوم','Resetting':'جارٍ الضبط','Delete':'حذف','Sure?':'تأكيد؟','Loading':'جارٍ التحميل',
+'Nothing here yet':'لا يوجد شيء هنا بعد','Nothing matches':'لا توجد نتائج','Try a different search.':'جرّب كلمة بحث أخرى.',
+'Alert when a date is within':'نبّه عندما يكون التاريخ خلال','days, or service within':'يوماً، أو الصيانة خلال','km':'كم','Alert days':'أيام التنبيه','Alert km':'كم التنبيه',
+'Time slot':'الفترة','Task':'المهمة','Category':'الفئة','Priority':'الأولوية','Status':'الحالة','Done at':'وقت الإنجاز','Remarks':'ملاحظات',
+'ID':'الرقم','Plate no.':'رقم اللوحة','Type':'النوع','Make / model':'الماركة / الموديل','Year':'السنة','Driver':'السائق','Assigned to':'مخصصة لـ','Registration expiry':'انتهاء الاستمارة','Insurance expiry':'انتهاء التأمين','Inspection expiry':'انتهاء الفحص','Next service date':'موعد الصيانة القادم','Service at (km)':'الصيانة عند (كم)','Opening odometer':'العداد الابتدائي','Current odometer':'العداد الحالي','Alert':'التنبيه','Used on report date':'استُخدمت بتاريخ التقرير',
+'Date':'التاريخ','Vehicle':'المركبة','Site / destination':'الموقع / الوجهة','Purpose':'الغرض','Start km':'كم البداية','End km':'كم النهاية','KM driven':'الكيلومترات المقطوعة','Fuel (L)':'الوقود (لتر)','Departure':'المغادرة','Return':'العودة',
+'Req no.':'رقم الطلب','Requested by':'طلب بواسطة','Site':'الموقع','Maximo WO':'أمر عمل Maximo','Item':'الصنف','Qty':'الكمية','UOM':'الوحدة','Required by':'مطلوب قبل','PR no.':'رقم طلب الشراء','PO no.':'رقم أمر الشراء','Supplier':'المورد','Days open':'أيام الفتح','Overdue?':'متأخر؟',
+'PO date':'تاريخ أمر الشراء','Ordered':'الكمية المطلوبة','Expected':'المتوقع','Delivery note':'إذن التسليم','Received':'مستلم','Received qty':'الكمية المستلمة','GRN no.':'رقم إذن الاستلام','Condition':'حالة الاستلام','Balance':'المتبقي',
+'Dispatch no.':'رقم الإرسال','Items':'الأصناف','Received by (site)':'المستلم (الموقع)','Signed DN?':'تم توقيع إذن التسليم؟',
+'Item code':'رمز الصنف','Description':'الوصف','Store':'المخزن','Current qty':'الكمية الحالية','Min level':'الحد الأدنى','Reorder qty':'كمية إعادة الطلب','Preferred supplier':'المورد المفضل','Last count':'آخر جرد',
+'Ref':'المرجع','Raised':'تاريخ الرفع','Issue':'المشكلة','Related to':'متعلق بـ','Responsible':'المسؤول','Due':'الاستحقاق','Days overdue':'أيام التأخير',
+'Start of Day':'بداية اليوم','Morning':'الصباح','Midday':'منتصف النهار','Afternoon':'بعد الظهر','End of Day':'نهاية اليوم',
+'Admin':'إدارية','Procurement':'المشتريات','Deliveries':'التسليمات','Documentation':'التوثيق','Reporting':'التقارير','Planning':'التخطيط',
+'Urgent':'عاجل','High':'مرتفع','Medium':'متوسط','Low':'منخفض','Pending':'معلّق','In Progress':'قيد التنفيذ','Done':'منجز','N/A':'لا ينطبق',
+'Pickup':'بيك أب','Van':'فان','Truck':'شاحنة','Car':'سيارة','Bus':'حافلة','Other':'أخرى','Active':'نشطة','Under Maintenance':'تحت الصيانة','Out of Service':'خارج الخدمة',
+'Completed':'مكتملة','Delayed':'متأخرة','Breakdown':'عطل','Cancelled':'ملغاة',
+'Each':'حبة','Box':'صندوق','Set':'طقم','Meter':'متر','Roll':'رول','Litre':'لتر','Kg':'كجم','Carton':'كرتون',
+'New':'جديد','PR Raised':'تم رفع طلب شراء','PO Issued':'صدر أمر الشراء','Delivered to Store':'سُلّم للمخزن','Issued to Site':'صُرف للموقع','Closed':'مغلق',
+'OK':'سليم','Damaged':'تالف','Short':'ناقص','Wrong Item':'صنف خاطئ','Planned':'مخطط','Dispatched':'تم الإرسال','Delivered':'تم التسليم','Failed':'فشل','Open':'مفتوح','No':'لا','Yes':'نعم',
+'Overdue':'متأخر','OVERDUE':'متأخر','Partial':'جزئي','Out of Stock':'نفد المخزون','Reorder':'إعادة طلب','Not set':'غير محدد','EXPIRED':'منتهية','DUE SOON':'قريباً',
+'Today at a glance':'نظرة سريعة على اليوم','Check this first thing and again before you send your status report.':'راجع هذه الصفحة في بداية الدوام ومرة أخرى قبل إرسال تقرير الحالة.','Report date':'تاريخ التقرير',
+'Requests and deliveries':'الطلبات والتسليمات','Dispatch, stock, follow-ups':'الإرسال والمخزون والمتابعات','Daily checklist':'قائمة المهام اليومية','Needs action':'يحتاج إلى إجراء',
+'vehicles':'مركبة','active':'نشطة','in maintenance':'في الصيانة','out of service':'خارج الخدمة','expired or overdue':'منتهية أو متأخرة','due soon':'تستحق قريباً','used on report date':'استُخدمت في تاريخ التقرير','active but idle':'نشطة لكن متوقفة','km on report date':'كم في تاريخ التقرير',
+'open requests':'طلبات مفتوحة','urgent open':'عاجلة مفتوحة','past required date':'تجاوزت التاريخ المطلوب','POs pending':'أوامر شراء معلقة','POs overdue':'أوامر شراء متأخرة','partly received':'مستلمة جزئياً',
+'dispatched on report date':'أُرسلت في تاريخ التقرير','delivered, DN not signed':'سُلّمت دون توقيع إذن التسليم','out of stock':'نفد مخزونها','at reorder level':'عند حد إعادة الطلب','open follow-ups':'متابعات مفتوحة','overdue follow-ups':'متابعات متأخرة','tasks done':'مهام منجزة','complete':'مكتمل',
+'Nothing needs action right now.':'لا يوجد ما يحتاج إلى إجراء الآن.','No vehicles yet':'لا توجد مركبات بعد','Add them on the Fleet tab.':'أضفها من تبويب الأسطول.','No driver':'بلا سائق','Used':'مستخدمة','Idle':'متوقفة',
+'Alert limits for documents and service are set on the Fleet tab.':'حدود التنبيه للوثائق والصيانة تُضبط من تبويب الأسطول.',
+'Request':'طلب','Reorder':'إعادة طلب','Follow-up':'متابعة',
+'Saving is not available in this view. Open the tracker from your claude.ai artifacts to edit it.':'الحفظ غير متاح في هذا العرض. افتح المتابعة من صفحاتك في claude.ai لتتمكن من التعديل.',
+'English':'English',
+'Upload Excel':'رفع ملف Excel','Replace file':'استبدال الملف','Choose file':'اختيار الملف','Upload your tracker Excel file':'ارفع ملف Excel الخاص بالمتابعة',
+'Choose Logistics_Tracker.xlsx, or drag it onto this page. It is read inside your browser and is not sent anywhere.':'اختر ملف Logistics_Tracker.xlsx أو اسحبه إلى هذه الصفحة. تتم قراءته داخل متصفحك ولا يُرسل إلى أي جهة.',
+'Upload the file again whenever you update it. The page checks it and refreshes everything.':'ارفع الملف مرة أخرى كلما حدّثته. تفحصه الصفحة وتحدّث كل شيء تلقائياً.',
+'Data Check':'فحص البيانات','Error':'خطأ','Warning':'تحذير','Note':'ملاحظة','Everything checks out.':'كل شيء سليم.','What the check found':'نتائج الفحص','Rows read per sheet':'الصفوف المقروءة لكل ورقة','Sheet':'الورقة','Rows':'الصفوف',
+'No rows found':'لا توجد صفوف','Add rows in the Excel sheet and upload the file again.':'أضف صفوفاً في ورقة Excel ثم ارفع الملف مرة أخرى.','Open Data Check':'فتح فحص البيانات',
+'The Excel reader could not load. Check your internet connection and reload the page.':'تعذر تحميل قارئ Excel. تحقق من اتصال الإنترنت وأعد تحميل الصفحة.',
+'Could not read this file: none of the expected sheets were found. Upload the Logistics Tracker workbook.':'تعذرت قراءة هذا الملف: لم يتم العثور على أي من الأوراق المتوقعة. ارفع ملف متابعة اللوجستيات.',
+'Could not read this file: the browser could not open it.':'تعذرت قراءة هذا الملف: لم يتمكن المتصفح من فتحه.'
+};
+var AR_DOC={'Registration':'الاستمارة','Insurance':'التأمين','Inspection':'الفحص','Service date':'موعد الصيانة'};
+var RULES=[
+ [/^Loaded: (.+), (\S+)$/,'تم تحميل: $1، $2'],
+ [/^Read from the "(.+)" sheet of your Excel file\. To change anything, edit the file and upload it again\.$/,'مقروء من ورقة "$1" في ملف Excel. لتغيير أي شيء، عدّل الملف ثم ارفعه مرة أخرى.'],
+ [/^The check found (\d+) error\(s\) and (\d+) warning\(s\)\.$/,'وجد الفحص $1 أخطاء و$2 تحذيرات.'],
+ [/^Could not read this file: (.*)$/,'تعذرت قراءة هذا الملف: $1'],
+ [/^Vehicles on (.+)$/,'المركبات بتاريخ $1'],
+ [/^Use the Add (.+?) button to create the first row\.$/,function(m,n){return 'استخدم زر «إضافة '+(AR[n]||n)+'» لإنشاء أول صف.'}],
+ [/^Could not save: (.*?)\. Reload the page and try again\.$/,'تعذر الحفظ: $1. أعد تحميل الصفحة وحاول مرة أخرى.'],
+ [/^Could not read (\w+) \((.*)\)\.$/,'تعذرت قراءة $1 ($2).'],
+ [/(Registration|Insurance|Inspection|Service date) expired (\d+) d ago/g,function(m,a,n){return AR_DOC[a]+' انتهى منذ '+n+' يوم'}],
+ [/(Registration|Insurance|Inspection|Service date) in (\d+) d/g,function(m,a,n){return AR_DOC[a]+' بعد '+n+' يوم'}],
+ [/Service overdue by (\d+) km/g,'الصيانة متأخرة بمقدار $1 كم'],
+ [/Service in (\d+) km/g,'الصيانة بعد $1 كم'],
+ [/ was needed by (\S+)$/,' كان مطلوباً قبل $1'],
+ [/ expected (\S+)$/,' متوقع في $1'],
+ [/: (\S+) left$/,': المتبقي $1'],
+ [/, (\d+) d overdue$/,'، متأخر $1 يوم']
+];
+function tr(s){
+  var k=s.trim();if(!k)return s;
+  var i=s.indexOf(k),lead=s.slice(0,i),trail=s.slice(i+k.length);
+  if(Object.prototype.hasOwnProperty.call(AR,k))return lead+AR[k]+trail;
+  var r=k;RULES.forEach(function(x){r=r.replace(x[0],x[1])});
+  return lead+r+trail}
+function trAll(){
+  var w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{acceptNode:function(n){var p=n.parentNode&&n.parentNode.nodeName;return p==='SCRIPT'||p==='STYLE'?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT}});
+  var n,list=[];while((n=w.nextNode()))list.push(n);
+  list.forEach(function(n){var v=tr(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v});
+  document.querySelectorAll('[placeholder],[aria-label],[title]').forEach(function(el){['placeholder','aria-label','title'].forEach(function(a){var v=el.getAttribute(a);if(v){var x=tr(v);if(x!==v)el.setAttribute(a,x)}})})}
+
+</script>
+<script>
+(function(){
+'use strict';
+/* ---------- helpers ---------- */
+var esc=function(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})};
+var pad=function(n,l){return String(n).padStart(l||3,'0')};
+var today=function(){var d=new Date();return d.getFullYear()+'-'+pad(d.getMonth()+1,2)+'-'+pad(d.getDate(),2)};
+var isD=function(s){return /^\d{4}-\d\d-\d\d$/.test(s||'')};
+var dnum=function(s){return isD(s)?Math.round(Date.UTC(+s.slice(0,4),+s.slice(5,7)-1,+s.slice(8,10))/864e5):null};
+var daysTo=function(s){return isD(s)?dnum(s)-dnum(today()):null};
+var num=function(v){return v===''||v==null||isNaN(+v)?null:+v};
+var GOOD=['Active','Done','Closed','Delivered','OK','Received','Completed','Yes','Issued to Site','Delivered to Store','Low'];
+var WARN=['In Progress','Under Maintenance','Delayed','New','PR Raised','PO Issued','Partial','Reorder','Planned','Dispatched','High','Short','Open','DUE SOON'];
+var BAD=['Out of Service','Breakdown','Failed','Overdue','OVERDUE','Out of Stock','Damaged','Wrong Item','Urgent','EXPIRED','No'];
+var chip=function(v){return GOOD.indexOf(v)>-1?'good':WARN.indexOf(v)>-1?'warn':BAD.indexOf(v)>-1?'bad':''};
+
+/* ---------- state ---------- */
+var S={db:null,data:{},loaded:{},settings:{days:30,km:500},tab:'dashboard',q:'',rdate:today(),err:'',ready:false,pending:false};
+S.lang='en';
+try{var t=localStorage.getItem('lt-tab');if(t)S.tab=t;if(localStorage.getItem('lt-lang')==='ar')S.lang='ar'}catch(e){}
+
+/* ---------- option lists ---------- */
+var O={
+  slot:['Start of Day','Morning','Midday','Afternoon','End of Day'],
+  cat:['Admin','Maximo','Procurement','Deliveries','Dispatch','Fleet','Inventory','Documentation','Reporting','Planning'],
+  pri:['Urgent','High','Medium','Low'],
+  tstat:['Pending','In Progress','Done','N/A'],
+  vtype:['Pickup','Van','Truck','Car','Bus','Other'],
+  vstat:['Active','Under Maintenance','Out of Service'],
+  trip:['Completed','In Progress','Delayed','Breakdown','Cancelled'],
+  uom:['Each','Box','Set','Meter','Roll','Litre','Kg','Carton'],
+  rstat:['New','PR Raised','PO Issued','Delivered to Store','Issued to Site','Closed','Cancelled'],
+  cond:['','OK','Damaged','Short','Wrong Item'],
+  dstat:['Planned','Dispatched','Delivered','Failed'],
+  fstat:['Open','In Progress','Closed'],
+  yn:['No','Yes']
+};
+
+/* ---------- derived values ---------- */
+function fleetBy(){var m={};(S.data.fleet||[]).forEach(function(v){m[v.vid]=v});return m}
+function curOdo(v){var o=num(v.odo),best=o;(S.data.trips||[]).forEach(function(t){if(t.vid===v.vid){var e=num(t.end);if(e!=null&&(best==null||e>best))best=e}});return best}
+function vAlert(v){
+  var d=S.settings.days,k=S.settings.km,ds=[daysTo(v.reg),daysTo(v.ins),daysTo(v.insp),daysTo(v.svc)].filter(function(x){return x!=null});
+  var o=curOdo(v),sk=num(v.svc_km),kl=(sk!=null&&o!=null)?sk-o:null;
+  if(!ds.length&&kl==null)return{s:'Not set',c:'',why:[]};
+  var why=[],bad=false,soon=false;
+  [['Registration',daysTo(v.reg)],['Insurance',daysTo(v.ins)],['Inspection',daysTo(v.insp)],['Service date',daysTo(v.svc)]].forEach(function(p){
+    if(p[1]==null)return;
+    if(p[1]<0){bad=true;why.push(p[0]+' expired '+(-p[1])+' d ago')}else if(p[1]<=d){soon=true;why.push(p[0]+' in '+p[1]+' d')}});
+  if(kl!=null){if(kl<0){bad=true;why.push('Service overdue by '+(-kl)+' km')}else if(kl<=k){soon=true;why.push('Service in '+kl+' km')}}
+  return bad?{s:'EXPIRED',c:'bad',why:why}:soon?{s:'DUE SOON',c:'warn',why:why}:{s:'OK',c:'good',why:why};
+}
+function reqOpen(r){return['Issued to Site','Closed','Cancelled'].indexOf(r.status)<0}
+function reqLate(r){return reqOpen(r)&&isD(r.required)&&daysTo(r.required)<0}
+function poStat(p){var o=num(p.ordered),r=num(p.rqty);
+  if(o!=null&&r!=null&&r>=o)return'Received';
+  if(isD(p.expected)&&daysTo(p.expected)<0)return'Overdue';
+  return r>0?'Partial':'Pending'}
+function stStat(s){var q=num(s.qty),m=num(s.min);if(q==null)return'';return q<=0?'Out of Stock':(m!=null&&q<=m)?'Reorder':'OK'}
+function fuLate(f){return f.status!=='Closed'&&isD(f.due)&&daysTo(f.due)<0?-daysTo(f.due):0}
+
+/* ---------- table schemas ---------- */
+var SCH={
+ tasks:{label:'Daily Tasks',title:'Daily task checklist',blurb:'Your daily routine. Tick each task off as you go, then reset the day tomorrow morning.',
+  noun:'task',cols:[
+   {k:'slot',l:'Time slot',t:'sel',o:O.slot,w:120},{k:'task',l:'Task',t:'text',w:420},{k:'cat',l:'Category',t:'sel',o:O.cat,w:120},
+   {k:'pri',l:'Priority',t:'sel',o:O.pri,w:90},{k:'status',l:'Status',t:'sel',o:O.tstat,w:110},{k:'done',l:'Done at',t:'time',w:90},{k:'rem',l:'Remarks',t:'text',w:200}],
+  add:function(){return{slot:'Morning',task:'',cat:'Admin',pri:'Medium',status:'Pending'}}},
+ fleet:{label:'Fleet',title:'Vehicle fleet register',blurb:'One row per vehicle. Alerts come from the dates and service kilometres you enter.',noun:'vehicle',
+  cols:[
+   {k:'vid',l:'ID',t:'text',w:70,mono:1},{k:'plate',l:'Plate no.',t:'text',w:110,mono:1},{k:'type',l:'Type',t:'sel',o:O.vtype,w:90},{k:'model',l:'Make / model',t:'text',w:180},
+   {k:'year',l:'Year',t:'num',w:70},{k:'driver',l:'Driver',t:'text',w:170},{k:'team',l:'Assigned to',t:'text',w:140},{k:'status',l:'Status',t:'sel',o:O.vstat,w:140},
+   {k:'reg',l:'Registration expiry',t:'date',w:140},{k:'ins',l:'Insurance expiry',t:'date',w:140},{k:'insp',l:'Inspection expiry',t:'date',w:140},{k:'svc',l:'Next service date',t:'date',w:140},
+   {k:'svc_km',l:'Service at (km)',t:'num',w:100},{k:'odo',l:'Opening odometer',t:'num',w:110},
+   {k:'_odo',l:'Current odometer',t:'calc',fn:function(r){var o=curOdo(r);return{v:o==null?'':o.toLocaleString(),c:'plain'}}},
+   {k:'_al',l:'Alert',t:'calc',fn:function(r){var a=vAlert(r);return{v:a.s,c:a.c,title:a.why.join(', ')}}},
+   {k:'_used',l:'Used on report date',t:'calc',fn:function(r){var n=(S.data.trips||[]).filter(function(t){return t.vid===r.vid&&t.date===S.rdate}).length;return{v:n?'Yes':'No',c:n?'good':''}}}],
+  add:function(rows){var n=rows.length+1;return{vid:'V-'+pad(n,2),plate:'',type:'Pickup',status:'Active'}}},
+ trips:{label:'Vehicle Log',title:'Daily vehicle trip log',blurb:'One row per trip. Choose the vehicle and the driver fills in. The end odometer updates the fleet register.',noun:'trip',
+  cols:[
+   {k:'date',l:'Date',t:'date',w:130},{k:'vid',l:'Vehicle',t:'vid',w:90},
+   {k:'_dr',l:'Driver',t:'calc',fn:function(r){var v=fleetBy()[r.vid];return{v:v?v.driver:'',c:'plain'}}},
+   {k:'dest',l:'Site / destination',t:'text',w:150},{k:'purpose',l:'Purpose',t:'text',w:240},{k:'start',l:'Start km',t:'num',w:90},{k:'end',l:'End km',t:'num',w:90},
+   {k:'_km',l:'KM driven',t:'calc',fn:function(r){var a=num(r.start),b=num(r.end);return{v:a!=null&&b!=null?(b-a).toLocaleString():'',c:'plain'}}},
+   {k:'fuel',l:'Fuel (L)',t:'num',w:80},{k:'dep',l:'Departure',t:'time',w:90},{k:'ret',l:'Return',t:'time',w:90},{k:'status',l:'Status',t:'sel',o:O.trip,w:120}],
+  add:function(){return{date:S.rdate,vid:'',status:'Completed'}}},
+ requests:{label:'Requests',title:'Material requests',blurb:'Every item a site or technician asks for, from request to issue. Link it to the Maximo work order.',noun:'request',
+  cols:[
+   {k:'no',l:'Req no.',t:'text',w:90,mono:1},{k:'date',l:'Date',t:'date',w:130},{k:'by',l:'Requested by',t:'text',w:130},{k:'site',l:'Site',t:'text',w:110},{k:'wo',l:'Maximo WO',t:'text',w:100,mono:1},
+   {k:'item',l:'Item',t:'text',w:240},{k:'qty',l:'Qty',t:'num',w:60},{k:'uom',l:'UOM',t:'sel',o:O.uom,w:80},{k:'pri',l:'Priority',t:'sel',o:O.pri,w:90},{k:'required',l:'Required by',t:'date',w:130},
+   {k:'status',l:'Status',t:'sel',o:O.rstat,w:150},{k:'pr',l:'PR no.',t:'text',w:90,mono:1},{k:'po',l:'PO no.',t:'text',w:90,mono:1},{k:'supplier',l:'Supplier',t:'text',w:130},
+   {k:'_age',l:'Days open',t:'calc',fn:function(r){var d=daysTo(r.date);return{v:reqOpen(r)&&d!=null?String(-d):'',c:'plain'}}},
+   {k:'_late',l:'Overdue?',t:'calc',fn:function(r){return reqLate(r)?{v:'OVERDUE',c:'bad'}:{v:'',c:''}}}],
+  add:function(rows){return{no:'REQ-'+pad(rows.length+1),date:today(),qty:1,uom:'Each',pri:'Medium',status:'New'}}},
+ pos:{label:'PO Deliveries',title:'Purchase orders and incoming deliveries',blurb:'What you ordered and what has arrived. Status updates from the quantities and the expected date.',noun:'PO',
+  cols:[
+   {k:'po',l:'PO no.',t:'text',w:100,mono:1},{k:'date',l:'PO date',t:'date',w:130},{k:'supplier',l:'Supplier',t:'text',w:150},{k:'item',l:'Item',t:'text',w:230},{k:'ordered',l:'Ordered',t:'num',w:80},
+   {k:'expected',l:'Expected',t:'date',w:130},{k:'dn',l:'Delivery note',t:'text',w:110,mono:1},{k:'rdate',l:'Received',t:'date',w:130},{k:'rqty',l:'Received qty',t:'num',w:90},
+   {k:'grn',l:'GRN no.',t:'text',w:90,mono:1},{k:'cond',l:'Condition',t:'sel',o:O.cond,w:110},
+   {k:'_bal',l:'Balance',t:'calc',fn:function(r){var o=num(r.ordered),q=num(r.rqty)||0;return{v:o==null?'':String(o-q),c:'plain'}}},
+   {k:'_st',l:'Status',t:'calc',fn:function(r){var s=poStat(r);return{v:s,c:chip(s)}}}],
+  add:function(rows){return{po:'PO-'+pad(rows.length+1,4),date:today()}}},
+ dispatch:{label:'Dispatch',title:'Materials dispatched to sites',blurb:'One row per delivery to a site. Mark the signed delivery note when the site returns it.',noun:'dispatch',
+  cols:[
+   {k:'no',l:'Dispatch no.',t:'text',w:100,mono:1},{k:'date',l:'Date',t:'date',w:130},{k:'site',l:'Site',t:'text',w:120},{k:'items',l:'Items',t:'text',w:260},{k:'qty',l:'Qty',t:'num',w:60},
+   {k:'vid',l:'Vehicle',t:'vid',w:90},
+   {k:'_dr',l:'Driver',t:'calc',fn:function(r){var v=fleetBy()[r.vid];return{v:v?v.driver:'',c:'plain'}}},
+   {k:'req',l:'Req no.',t:'text',w:90,mono:1},{k:'rby',l:'Received by (site)',t:'text',w:140},{k:'signed',l:'Signed DN?',t:'sel',o:O.yn,w:90},{k:'status',l:'Status',t:'sel',o:O.dstat,w:110}],
+  add:function(rows){return{no:'DSP-'+pad(rows.length+1),date:S.rdate,signed:'No',status:'Planned'}}},
+ stock:{label:'Inventory',title:'Stock levels',blurb:'Update the current quantity from Maximo or after a count. Status flags items at or below the minimum level.',noun:'item',
+  cols:[
+   {k:'code',l:'Item code',t:'text',w:110,mono:1},{k:'desc',l:'Description',t:'text',w:260},{k:'cat',l:'Category',t:'text',w:120},{k:'uom',l:'UOM',t:'sel',o:O.uom,w:80},{k:'loc',l:'Store',t:'text',w:120},
+   {k:'qty',l:'Current qty',t:'num',w:90},{k:'min',l:'Min level',t:'num',w:80},{k:'reorder',l:'Reorder qty',t:'num',w:90},
+   {k:'_st',l:'Status',t:'calc',fn:function(r){var s=stStat(r);return{v:s,c:chip(s)}}},{k:'supplier',l:'Preferred supplier',t:'text',w:150},{k:'count',l:'Last count',t:'date',w:130}],
+  add:function(){return{uom:'Each'}}},
+ followups:{label:'Follow-ups',title:'Follow-ups and open issues',blurb:'Anything you need to chase: supplier delays, missing documents, damaged items, site requests.',noun:'follow-up',
+  cols:[
+   {k:'ref',l:'Ref',t:'text',w:80,mono:1},{k:'date',l:'Raised',t:'date',w:130},{k:'issue',l:'Issue',t:'text',w:300},{k:'rel',l:'Related to',t:'text',w:170},{k:'resp',l:'Responsible',t:'text',w:140},
+   {k:'due',l:'Due',t:'date',w:130},{k:'pri',l:'Priority',t:'sel',o:O.pri,w:90},{k:'status',l:'Status',t:'sel',o:O.fstat,w:110},
+   {k:'_od',l:'Days overdue',t:'calc',fn:function(r){var n=fuLate(r);return n?{v:String(n),c:'bad'}:{v:'',c:''}}},{k:'rem',l:'Remarks',t:'text',w:200}],
+  add:function(rows){return{ref:'FU-'+pad(rows.length+1),date:today(),pri:'Medium',status:'Open'}}}
+};
+var TABS=['dashboard','tasks','fleet','trips','requests','pos','dispatch','stock','followups','checks'];
+var LABEL={dashboard:'Dashboard',checks:'Data Check'};TABS.forEach(function(k){if(SCH[k])LABEL[k]=SCH[k].label});
+
+
+/* ---------- rendering ---------- */
+function vcell(c,r){
+  var v=r[c.k]==null?'':r[c.k],w=c.w?' style="min-width:'+c.w+'px"':'';
+  if(c.t==='calc'){var x=c.fn(r);return'<td><span class="calc '+(x.c||'')+'"'+(x.title?' title="'+esc(x.title)+'"':'')+'>'+esc(x.v)+'</span></td>'}
+  if(v==='')return'<td'+w+'></td>';
+  if(c.t==='sel'){var cl=chip(v);return'<td'+w+'>'+(cl?'<span class="calc '+cl+'">'+esc(v)+'</span>':'<span class="v">'+esc(v)+'</span>')+'</td>'}
+  return'<td'+w+'><span class="v'+((c.mono||c.t==='vid')?' mono':'')+'">'+esc(v)+'</span></td>'}
+function tableHTML(key){
+  var sc=SCH[key],rows=(S.data[key]||[]).slice(),q=S.q.trim().toLowerCase();
+  if(q)rows=rows.filter(function(r){return Object.keys(r).some(function(k){return k.charAt(0)!=='_'&&k!=='id'&&String(r[k]).toLowerCase().indexOf(q)>-1})});
+  var h='<div class="head"><div><h2>'+esc(sc.title)+'</h2><p>Read from the "'+esc(SPEC[key].sheet)+'" sheet of your Excel file. To change anything, edit the file and upload it again.</p></div><div class="tools"><input class="search" id="q" type="search" placeholder="Search" value="'+esc(S.q)+'" aria-label="Search"></div></div>';
+  if(key==='fleet')h+='<div class="head" style="margin-bottom:8px"><span class="rdate">Alert when a date is within <input class="sm" id="sd" type="number" min="1" value="'+S.settings.days+'" aria-label="Alert days"> days, or service within <input class="sm" id="sk" type="number" min="1" value="'+S.settings.km+'" aria-label="Alert km"> km</span></div>';
+  if(!rows.length)return h+'<div class="panel empty"><b>'+(q?'Nothing matches':'No rows found')+'</b>'+(q?'Try a different search.':'Add rows in the Excel sheet and upload the file again.')+'</div>';
+  h+='<div class="tablewrap"><table><thead><tr><th></th>';
+  sc.cols.forEach(function(c){h+='<th class="'+(c.t==='calc'?'calc':'')+'">'+esc(c.l)+'</th>'});
+  h+='</tr></thead><tbody>';
+  rows.forEach(function(r){h+='<tr><td class="n">'+esc(r._r||'')+'</td>';sc.cols.forEach(function(c){h+=vcell(c,r)});h+='</tr>'});
+  return h+'</tbody></table></div>'}
+function checksHTML(){
+  var I=S.issues||[],ar=S.lang==='ar';
+  var cnt={bad:0,warn:0,info:0};I.forEach(function(x){cnt[x.sev]++});
+  var h='<div class="head"><div><h2>Data Check</h2><p>Every upload is checked for missing links, wrong numbers and unreadable dates.</p></div></div><div class="grid">';
+  h+='<section class="panel" style="grid-column:1/-1"><h3>What the check found</h3>';
+  if(!I.length)h+='<span class="ok">Everything checks out.</span>';
+  else{h+='<ul class="issues">';['bad','warn','info'].forEach(function(s){I.filter(function(x){return x.sev===s}).forEach(function(x){
+    h+='<li><span class="tag '+(s==='bad'?'bad':s==='warn'?'warn':'info')+'">'+(s==='bad'?'Error':s==='warn'?'Warning':'Note')+'</span><span class="wh">'+esc(x.sheet+(x.row?' row '+x.row:''))+'</span><span>'+esc(ar?x.ar:x.en)+'</span></li>'})});h+='</ul>'}
+  h+='</section><section class="panel"><h3>Rows read per sheet</h3><table class="mini"><thead><tr><th>Sheet</th><th>Rows</th></tr></thead><tbody>';
+  Object.keys(SPEC).forEach(function(k){h+='<tr><td>'+esc(SPEC[k].sheet)+'</td><td>'+(S.data[k]||[]).length+'</td></tr>'});
+  return h+'</tbody></table></section></div>'}
+function gateHTML(){
+  return (S.err?'<div class="err">'+esc(S.err)+'</div>':'')+'<div class="panel gate"><b>Upload your tracker Excel file</b><p>Choose Logistics_Tracker.xlsx, or drag it onto this page. It is read inside your browser and is not sent anywhere.</p><button class="btn" data-act="pick">Choose file</button><p style="margin:14px 0 0;font-size:13px">Upload the file again whenever you update it. The page checks it and refreshes everything.</p></div>'}
+
+function dashHTML(){
+  var F=S.data.fleet||[],T=S.data.trips||[],R=S.data.requests||[],P=S.data.pos||[],D=S.data.dispatch||[],I=S.data.stock||[],U=S.data.followups||[],K=S.data.tasks||[];
+  var act=F.filter(function(v){return v.status==='Active'}).length;
+  var tripsD=T.filter(function(t){return t.date===S.rdate}),used={};tripsD.forEach(function(t){if(t.vid)used[t.vid]=1});
+  var km=0;tripsD.forEach(function(t){var a=num(t.start),b=num(t.end);if(a!=null&&b!=null&&b>=a)km+=b-a});
+  var idle=F.filter(function(v){return v.status==='Active'&&!used[v.vid]}).length;
+  var als=F.map(function(v){return{v:v,a:vAlert(v)}});
+  var exp=als.filter(function(x){return x.a.s==='EXPIRED'}).length,soon=als.filter(function(x){return x.a.s==='DUE SOON'}).length;
+  var openR=R.filter(reqOpen),late=R.filter(reqLate),urg=openR.filter(function(r){return r.pri==='Urgent'});
+  var poS=P.map(poStat),stS=I.map(stStat);
+  var dd=D.filter(function(d){return d.date===S.rdate}),unsigned=D.filter(function(d){return d.status==='Delivered'&&d.signed!=='Yes'});
+  var fuOpen=U.filter(function(f){return f.status!=='Closed'}),fuLateN=U.filter(function(f){return fuLate(f)>0});
+  var applic=K.filter(function(t){return t.status!=='N/A'}).length,done=K.filter(function(t){return t.status==='Done'}).length;
+  var st=function(n,l,c){return'<div class="stat '+(c&&n>0?c:'')+'"><b>'+n+'</b><span>'+l+'</span></div>'};
+  var h='<div class="head"><div><h2>Today at a glance</h2><p>Check this first thing and again before you send your status report.</p></div><div class="tools"><label class="rdate">Report date <input type="date" id="rd" value="'+esc(S.rdate)+'"></label></div></div><div class="grid">';
+  h+='<section class="panel"><h3>Fleet</h3><div class="stats">'+st(F.length,'vehicles')+st(act,'active')+st(F.filter(function(v){return v.status==='Under Maintenance'}).length,'in maintenance','warn')+st(F.filter(function(v){return v.status==='Out of Service'}).length,'out of service','bad')+st(exp,'expired or overdue','bad')+st(soon,'due soon','warn')+st(Object.keys(used).length,'used on report date','good')+st(idle,'active but idle')+st(km.toLocaleString(),'km on report date')+'</div></section>';
+  h+='<section class="panel"><h3>Requests and deliveries</h3><div class="stats">'+st(openR.length,'open requests')+st(urg.length,'urgent open','bad')+st(late.length,'past required date','bad')+st(poS.filter(function(s){return s==='Pending'}).length,'POs pending')+st(poS.filter(function(s){return s==='Overdue'}).length,'POs overdue','bad')+st(poS.filter(function(s){return s==='Partial'}).length,'partly received','warn')+'</div></section>';
+  h+='<section class="panel"><h3>Dispatch, stock, follow-ups</h3><div class="stats">'+st(dd.length,'dispatched on report date')+st(unsigned.length,'delivered, DN not signed','warn')+st(stS.filter(function(s){return s==='Out of Stock'}).length,'out of stock','bad')+st(stS.filter(function(s){return s==='Reorder'}).length,'at reorder level','warn')+st(fuOpen.length,'open follow-ups')+st(fuLateN.length,'overdue follow-ups','bad')+'</div></section>';
+  h+='<section class="panel"><h3>Daily checklist</h3><div class="stats">'+st(done+' / '+applic,'tasks done','good')+st(applic?Math.round(done/applic*100)+'%':'0%','complete')+'</div></section>';
+  var L=[];
+  als.forEach(function(x){if(x.a.c==='bad'||x.a.c==='warn')L.push([x.a.c,x.a.s,(x.v.plate||x.v.vid)+': '+x.a.why.join(', ')])});
+  late.forEach(function(r){L.push(['bad','Request',(r.no||'')+' '+(r.item||'')+' was needed by '+r.required])});
+  P.forEach(function(p,i){if(poS[i]==='Overdue')L.push(['bad','PO',(p.po||'')+' '+(p.item||'')+' expected '+p.expected])});
+  I.forEach(function(s,i){if(stS[i]==='Out of Stock'||stS[i]==='Reorder')L.push([stS[i]==='Reorder'?'warn':'bad',stS[i],(s.code||'')+' '+(s.desc||'')+': '+(s.qty==null?'':s.qty)+' left'])});
+  U.forEach(function(f){if(fuLate(f))L.push(['bad','Follow-up',(f.ref||'')+' '+(f.issue||'')+', '+fuLate(f)+' d overdue'])});
+  h+='<section class="panel" style="grid-column:1/-1"><h3>Needs action</h3>'+(!S.loaded.fleet?'Loading':L.length?'<ul class="alist">'+L.map(function(x){return'<li><span class="tag '+x[0]+'">'+esc(x[1])+'</span><span>'+esc(x[2])+'</span></li>'}).join('')+'</ul>':'<span class="ok">Nothing needs action right now.</span>')+'</section>';
+  h+='<section class="panel" style="grid-column:1/-1"><h3>Vehicles on '+esc(S.rdate)+'</h3>'+(F.length?'<div class="vlist">'+F.map(function(v){var a=vAlert(v);var n=used[v.vid];return'<div class="veh"><span class="pl">'+esc(v.vid)+'  '+esc(v.plate)+'</span><span class="dr">'+esc(v.driver||'No driver')+'</span><span class="dr" style="color:var(--mute)">'+esc((v.model||'')+(v.team?', '+v.team:''))+'</span><span class="ft"><span class="chip '+chip(v.status)+'">'+esc(v.status||'')+'</span>'+(a.c?'<span class="chip '+a.c+'">'+esc(a.s)+'</span>':'')+'<span class="chip '+(n?'good':'')+'">'+(n?'Used':'Idle')+'</span></span></div>'}).join('')+'</div>':'<div class="empty"><b>No vehicles yet</b>Add them on the Fleet tab.</div>')+'</section>';
+  return h+'</div><p class="note">Alert limits for documents and service are set on the Fleet tab.</p>'}
+
+
+function render(){
+  var rt=document.documentElement;rt.setAttribute('lang',S.lang);rt.setAttribute('dir',S.lang==='ar'?'rtl':'ltr');
+  document.getElementById('ttl').textContent='Logistics Tracker';
+  document.getElementById('sub').textContent='IFAS facility management';
+  document.getElementById('sync').textContent=S.file?('Loaded: '+S.file.name+', '+S.file.at):'';
+  document.getElementById('upb').textContent=S.file?'Replace file':'Upload Excel';
+  document.getElementById('lang').textContent=S.lang==='ar'?'English':'العربية';
+  var nav=document.getElementById('nav');
+  nav.innerHTML=S.file?TABS.map(function(k){return'<button data-tab="'+k+'"'+(k===S.tab?' aria-current="page"':'')+'>'+esc(LABEL[k])+'</button>'}).join(''):'';
+  var m=document.getElementById('main');
+  if(!S.file){m.innerHTML=gateHTML()}
+  else{
+    var e=0,w=0;(S.issues||[]).forEach(function(x){if(x.sev==='bad')e++;else if(x.sev==='warn')w++});
+    m.innerHTML=(S.err?'<div class="err">'+esc(S.err)+'</div>':'')
+      +((e+w)>0&&S.tab!=='checks'?'<div class="banner"><span>The check found '+e+' error(s) and '+w+' warning(s).</span><button data-tab="checks">Open Data Check</button></div>':'')
+      +(S.tab==='dashboard'?dashHTML():S.tab==='checks'?checksHTML():tableHTML(S.tab))}
+  if(S.lang==='ar')trAll();
+  var q=document.getElementById('q');if(q&&S.refocusQ){q.focus();q.setSelectionRange(q.value.length,q.value.length);S.refocusQ=false}
+}
+
+/* ---------- reading the Excel file ---------- */
+var SPEC={
+ tasks:{sheet:'Daily Tasks',key:'task',cols:{'Time Slot':'slot','Task':'task','Category':'cat','Priority':'pri','Status':'status','Time Done':'done','Remarks':'rem'},time:['done']},
+ fleet:{sheet:'Fleet',key:'vid',cols:{'Vehicle ID':'vid','Plate No.':'plate','Vehicle Type':'type','Make / Model':'model','Year':'year','Assigned Driver':'driver','Assigned Site':'team','Status':'status','Registration Expiry':'reg','Insurance Expiry':'ins','Inspection Expiry':'insp','Next Service Date':'svc','Next Service At (km)':'svc_km','Opening Odometer (km)':'odo','Remarks':'rem'},date:['reg','ins','insp','svc'],num:['year','svc_km','odo']},
+ trips:{sheet:'Vehicle Log',key:'vid',cols:{'Date':'date','Vehicle ID':'vid','Site / Destination':'dest','Purpose / Trip Details':'purpose','Start Odometer':'start','End Odometer':'end','Fuel (Litres)':'fuel','Departure':'dep','Return':'ret','Trip Status':'status','Remarks':'rem'},date:['date'],num:['start','end','fuel'],time:['dep','ret']},
+ requests:{sheet:'Material Requests',key:'no',cols:{'Req No':'no','Date':'date','Requested By':'by','Site':'site','Maximo WO No.':'wo','Item Description':'item','Qty':'qty','UOM':'uom','Priority':'pri','Required Date':'required','Status':'status','PR No.':'pr','PO No.':'po','Supplier':'supplier','Remarks':'rem'},date:['date','required'],num:['qty']},
+ pos:{sheet:'PO Deliveries',key:'po',cols:{'PO No.':'po','PO Date':'date','Supplier':'supplier','Item Description':'item','Ordered Qty':'ordered','Expected Delivery':'expected','Delivery Note No.':'dn','Received Date':'rdate','Received Qty':'rqty','GRN No.':'grn','Condition':'cond','Remarks':'rem'},date:['date','expected','rdate'],num:['ordered','rqty']},
+ dispatch:{sheet:'Site Dispatch',key:'no',cols:{'Dispatch No.':'no','Date':'date','Site':'site','Items / Description':'items','Qty':'qty','Vehicle ID':'vid','Req No.':'req','Received By (Site)':'rby','Signed DN Received?':'signed','Status':'status','Remarks':'rem'},date:['date'],num:['qty']},
+ stock:{sheet:'Inventory',key:'code',cols:{'Item Code':'code','Description':'desc','Category':'cat','UOM':'uom','Store / Location':'loc','Current Qty':'qty','Min Level':'min','Reorder Qty':'reorder','Preferred Supplier':'supplier','Last Count Date':'count','Remarks':'rem'},date:['count'],num:['qty','min','reorder']},
+ followups:{sheet:'Follow-ups',key:'ref',cols:{'Ref':'ref','Date Raised':'date','Issue / Item':'issue','Related To (Site/Supplier/WO)':'rel','Responsible':'resp','Due Date':'due','Priority':'pri','Status':'status','Remarks':'rem'},date:['date','due'],num:[]}
+};
+function norm(s){return String(s==null?'':s).replace(/\s+/g,' ').trim().toLowerCase()}
+function cDate(v){
+  if(v===''||v==null)return{v:''};
+  if(v instanceof Date&&!isNaN(v))return{v:v.getFullYear()+'-'+pad(v.getMonth()+1,2)+'-'+pad(v.getDate(),2)};
+  if(typeof v==='number'){if(v>20000&&v<80000){var d=new Date(Math.round((v-25569)*864e5));return{v:d.getUTCFullYear()+'-'+pad(d.getUTCMonth()+1,2)+'-'+pad(d.getUTCDate(),2)}}return{v:'',bad:true}}
+  var s=String(v).trim();if(!s||/^n\/?a$/i.test(s)||s==='-')return{v:''};
+  if(isD(s))return{v:s};
+  var m=s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/);if(m)return{v:m[3]+'-'+pad(m[2],2)+'-'+pad(m[1],2)};
+  return{v:'',bad:true}}
+function cNum(v){
+  if(v===''||v==null)return{v:''};
+  if(typeof v==='number')return{v:v};
+  var s=String(v).replace(/,/g,'').trim();if(!s||/^n\/?a$/i.test(s)||s==='-')return{v:''};
+  return isNaN(+s)?{v:'',bad:true}:{v:+s}}
+function cTime(v){
+  if(v===''||v==null)return'';
+  if(typeof v==='number'&&v>=0&&v<1){var mi=Math.round(v*1440);return pad(Math.floor(mi/60),2)+':'+pad(mi%60,2)}
+  if(v instanceof Date&&!isNaN(v))return pad(v.getHours(),2)+':'+pad(v.getMinutes(),2);
+  return String(v).trim()}
+function canonMap(coll){
+  var m={};(SCH[coll]?SCH[coll].cols:[]).forEach(function(c){if(c.t==='sel'&&c.o){var x={};c.o.forEach(function(o){if(o)x[o.toLowerCase()]=o});m[c.k]=x}});return m}
+
+function importWorkbook(wb){
+  var out={},issues=[],sheets=0,skipped=0;
+  function add(sev,sheet,row,en,ar){issues.push({sev:sev,sheet:sheet,row:row,en:en,ar:ar})}
+  Object.keys(SPEC).forEach(function(coll){
+    var sp=SPEC[coll];out[coll]=[];
+    var ws=wb.Sheets&&wb.Sheets[sp.sheet];
+    if(!ws){add('warn',sp.sheet,'','Sheet "'+sp.sheet+'" was not found in the file.','لم يتم العثور على الورقة "'+sp.sheet+'" في الملف.');return}
+    var grid=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:true,blankrows:true});
+    var keyHeader='';Object.keys(sp.cols).forEach(function(k){if(sp.cols[k]===sp.key)keyHeader=k});
+    var hr=-1;for(var i=0;i<Math.min(grid.length,15);i++){if(grid[i].some(function(c){return norm(c)===norm(keyHeader)})){hr=i;break}}
+    if(hr<0){add('warn',sp.sheet,'','Header "'+keyHeader+'" was not found in sheet "'+sp.sheet+'".','لم يتم العثور على العنوان "'+keyHeader+'" في الورقة "'+sp.sheet+'".');return}
+    sheets++;
+    var idx={};grid[hr].forEach(function(c,ci){var n=norm(c);if(n&&idx[n]==null)idx[n]=ci});
+    var colIdx={},label={};
+    Object.keys(sp.cols).forEach(function(hd){var k=sp.cols[hd],ci=idx[norm(hd)];label[k]=hd;if(ci==null){if(k!=='rem')add('warn',sp.sheet,'','Column "'+hd+'" was not found in sheet "'+sp.sheet+'".','لم يتم العثور على العمود "'+hd+'" في الورقة "'+sp.sheet+'".')}else colIdx[k]=ci});
+    var canon=canonMap(coll),isDate={},isNum={},isTime={};
+    (sp.date||[]).forEach(function(k){isDate[k]=1});(sp.num||[]).forEach(function(k){isNum[k]=1});(sp.time||[]).forEach(function(k){isTime[k]=1});
+    for(var r=hr+1;r<grid.length;r++){
+      var row=grid[r],o={_r:r+1,id:coll+'-'+(r+1)};
+      if(colIdx.rem!=null&&String(row[colIdx.rem]).toUpperCase().indexOf('EXAMPLE')>-1){skipped++;continue}
+      Object.keys(colIdx).forEach(function(k){
+        var v=row[colIdx[k]];
+        if(isDate[k]){var d=cDate(v);o[k]=d.v;if(d.bad)add('warn',sp.sheet,r+1,'"'+label[k]+'" is not a readable date.','"'+label[k]+'" ليس تاريخاً مقروءاً.')}
+        else if(isNum[k]){var n=cNum(v);o[k]=n.v;if(n.bad)add('warn',sp.sheet,r+1,'"'+label[k]+'" is not a number.','"'+label[k]+'" ليس رقماً.')}
+        else if(isTime[k])o[k]=cTime(v);
+        else{var s=v==null?'':String(v).trim();if(canon[k]&&canon[k][s.toLowerCase()])s=canon[k][s.toLowerCase()];o[k]=s}});
+      if(String(o[sp.key]==null?'':o[sp.key])==='')continue;
+      out[coll].push(o)}
+  });
+  if(skipped)add('info','','',skipped+' example row(s) marked EXAMPLE were skipped.',skipped+' من صفوف الأمثلة المعلّمة EXAMPLE تم تجاهلها.');
+  validate(out,add);
+  return{data:out,issues:issues,sheets:sheets}}
+
+function validate(out,add){
+  var F=out.fleet||[],fl={},seen={};
+  F.forEach(function(v){
+    if(seen[v.vid])add('bad','Fleet',v._r,'Vehicle ID '+v.vid+' appears more than once.','رقم المركبة '+v.vid+' مكرر.');seen[v.vid]=1;fl[v.vid]=1;
+    if(!v.plate)add('warn','Fleet',v._r,v.vid+' has no plate number.',v.vid+' بلا رقم لوحة.');
+    if(!v.status)add('warn','Fleet',v._r,v.vid+' has no status.',v.vid+' بلا حالة.')});
+  var nod=F.filter(function(v){return v.plate&&!v.reg&&!v.ins&&!v.insp&&!v.svc&&v.svc_km===''}).map(function(v){return v.vid});
+  if(nod.length)add('info','Fleet','',nod.length+' vehicle(s) have no expiry or service dates, so they cannot raise alerts: '+nod.join(', ')+'.',nod.length+' مركبة بلا تواريخ انتهاء أو صيانة، لذلك لن تظهر لها تنبيهات: '+nod.join('، ')+'.');
+  (out.trips||[]).forEach(function(t){
+    if(!fl[t.vid])add('bad','Vehicle Log',t._r,'Vehicle '+t.vid+' is not in the Fleet sheet.','المركبة '+t.vid+' غير موجودة في ورقة الأسطول.');
+    if(!t.date)add('warn','Vehicle Log',t._r,'This trip has no date.','هذه الرحلة بلا تاريخ.');
+    if(t.start!==''&&t.end!==''&&t.end<t.start)add('bad','Vehicle Log',t._r,'End odometer is lower than start odometer.','عداد النهاية أقل من عداد البداية.')});
+  [['requests','Material Requests','no'],['pos','PO Deliveries','po'],['dispatch','Site Dispatch','no'],['stock','Inventory','code'],['followups','Follow-ups','ref']].forEach(function(p){
+    var s={};(out[p[0]]||[]).forEach(function(r){var k=r[p[2]];if(s[k])add('warn',p[1],r._r,'"'+k+'" appears more than once.','"'+k+'" مكرر.');s[k]=1})});
+  (out.requests||[]).forEach(function(r){
+    if(r.qty==='')add('warn','Material Requests',r._r,r.no+' has no quantity.',r.no+' بلا كمية.');
+    if(r.date&&r.required&&r.required<r.date)add('warn','Material Requests',r._r,r.no+' is required before it was requested.',r.no+' مطلوب قبل تاريخ الطلب.')});
+  (out.pos||[]).forEach(function(p){
+    if(p.ordered!==''&&p.rqty!==''&&p.rqty>p.ordered)add('warn','PO Deliveries',p._r,p.po+': received quantity is higher than ordered.',p.po+': الكمية المستلمة أكبر من المطلوبة.');
+    if(p.rqty!==''&&p.rqty>0&&!p.grn)add('info','PO Deliveries',p._r,p.po+' has received goods but no GRN number.',p.po+' استلام بضاعة بلا رقم إذن استلام.')});
+  (out.dispatch||[]).forEach(function(d){
+    if(d.vid&&!fl[d.vid])add('bad','Site Dispatch',d._r,'Vehicle '+d.vid+' is not in the Fleet sheet.','المركبة '+d.vid+' غير موجودة في ورقة الأسطول.');
+    if(d.status==='Delivered'&&d.signed!=='Yes')add('warn','Site Dispatch',d._r,d.no+' is delivered but the signed delivery note is not marked.',d.no+' تم تسليمه لكن توقيع إذن التسليم غير محدد.')});
+  (out.stock||[]).forEach(function(s){if(s.qty!==''&&s.qty<0)add('bad','Inventory',s._r,s.code+' has a negative quantity.',s.code+' كميته سالبة.')});
+  (out.followups||[]).forEach(function(f){if(f.date&&f.due&&f.due<f.date)add('warn','Follow-ups',f._r,f.ref+' is due before it was raised.',f.ref+' موعده قبل تاريخ رفعه.')})}
+
+/* ---------- file handling ---------- */
+function persist(){try{localStorage.setItem('lt-data',JSON.stringify({file:S.file,data:S.data,issues:S.issues}))}catch(e){}}
+function handleFile(f){
+  if(!f)return;S.err='';
+  if(typeof XLSX==='undefined'){S.err='The Excel reader could not load. Check your internet connection and reload the page.';render();return}
+  var rd=new FileReader();
+  rd.onerror=function(){S.err='Could not read this file: the browser could not open it.';render()};
+  rd.onload=function(){
+    try{
+      var wb=XLSX.read(new Uint8Array(rd.result),{type:'array'});
+      var res=importWorkbook(wb);
+      if(!res.sheets){S.err='Could not read this file: none of the expected sheets were found. Upload the Logistics Tracker workbook.';render();return}
+      var d=new Date();
+      S.data=res.data;S.issues=res.issues;S.loaded={};Object.keys(res.data).forEach(function(k){S.loaded[k]=true});
+      S.file={name:f.name,at:pad(d.getHours(),2)+':'+pad(d.getMinutes(),2)};
+      persist();render()
+    }catch(e){S.err='Could not read this file: '+((e&&e.message)||'unknown error');render()}};
+  rd.readAsArrayBuffer(f)}
+
+/* ---------- events ---------- */
+document.addEventListener('click',function(e){
+  var b=e.target.closest('button');if(!b)return;
+  if(b.id==='lang'){S.lang=S.lang==='ar'?'en':'ar';try{localStorage.setItem('lt-lang',S.lang)}catch(x){}render();return}
+  if(b.id==='upb'||b.dataset.act==='pick'){document.getElementById('file').click();return}
+  if(b.dataset.tab){S.tab=b.dataset.tab;S.q='';try{localStorage.setItem('lt-tab',S.tab)}catch(x){}render();window.scrollTo(0,0)}});
+document.addEventListener('change',function(e){
+  var el=e.target;
+  if(el.id==='file'){handleFile(el.files&&el.files[0]);el.value='';return}
+  if(el.id==='rd'){S.rdate=isD(el.value)?el.value:today();render();return}
+  if(el.id==='sd'||el.id==='sk'){var v=Math.max(1,Math.round(+el.value)||1);if(el.id==='sd')S.settings.days=v;else S.settings.km=v;try{localStorage.setItem('lt-set',JSON.stringify(S.settings))}catch(x){}render()}});
+document.addEventListener('input',function(e){if(e.target.id==='q'){S.q=e.target.value;S.refocusQ=true;render()}});
+document.addEventListener('dragover',function(e){e.preventDefault()});
+document.addEventListener('drop',function(e){e.preventDefault();var f=e.dataTransfer&&e.dataTransfer.files&&e.dataTransfer.files[0];if(f)handleFile(f)});
+
+/* ---------- start ---------- */
+S.issues=[];S.file=null;
+try{
+  var st=JSON.parse(localStorage.getItem('lt-set')||'null');if(st&&st.days)S.settings={days:+st.days||30,km:+st.km||500};
+  var sv=JSON.parse(localStorage.getItem('lt-data')||'null');
+  if(sv&&sv.file&&sv.data){S.file=sv.file;S.data=sv.data;S.issues=sv.issues||[];Object.keys(sv.data).forEach(function(k){S.loaded[k]=true})}
+}catch(e){}
+if(S.tab!=='checks'&&!SCH[S.tab])S.tab='dashboard';
+window.__LT={importWorkbook:importWorkbook,S:S,dashHTML:dashHTML,tableHTML:tableHTML,checksHTML:checksHTML,render:render};
+render();
+})();
+
+</script>
+</body>
+</html>
